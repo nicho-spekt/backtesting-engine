@@ -3,7 +3,7 @@ import pandas as pd
 
 def calculate_metric(
     input_file,
-    output_file="data/results/portfolio_metric.csv"
+    output_file="data/results/portfolio_metric_buy_hold.csv"
 ):
     df = pd.read_csv(input_file)
     
@@ -22,4 +22,4 @@ def calculate_metric(
     metrics_df.to_csv(output_file, index=False)
     
 calculate_metric(
-    "data/results/VGT_ma_crossover_portfolio_ma.csv")
+    "data/results/VGT_buy_hold_portfolio.csv")
