@@ -4,7 +4,7 @@ from pathlib import Path
 def backtest_portfolio(
     input_file,
     initial_capital=100000,
-    output_file="data/results/portfolio_backtest.csv"
+    output_file="data/results/portfolio_backtest_ma.csv"
 ):
     df = pd.read_csv(input_file, index_col=0, parse_dates=[0])
 
@@ -36,7 +36,7 @@ def backtest_portfolio(
 
         df.at[row.Index, "Portfolio_return"] = (total_value / initial_capital - 1) * 100
 
-    df["Portfolio_return_1d"] = df["Total_value"].pct_change().fillna(0)
+    df["Portfolio_return_1d%"] = df["Total_value"].pct_change().fillna(0)*100
 
     df.drop(
         columns=["Ma_20", "Ma_50", "Signal", "Holding", "Return_1d"],
@@ -50,7 +50,7 @@ def backtest_portfolio(
 
 
 backtest_portfolio(
-    "data/processed/VGT_features.csv",
+    "data/processed/VGT_features_ma.csv",
     initial_capital=100000,
-    output_file="data/results/VGT_ma_crossover_portfolio.csv"
+    output_file="data/results/VGT_ma_crossover_portfolio_ma.csv"
 )

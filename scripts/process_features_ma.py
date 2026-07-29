@@ -19,4 +19,4 @@ def process_features(input_file, output_file):
     print(f"Processed features saved to {output_file}")
     
 
-process_features("data/raw/VGT.csv", "data/processed/VGT_features.csv")
+process_features("data/raw/VGT.csv", "data/processed/VGT_features_ma.csv")
