@@ -52,5 +52,5 @@ def backtest_portfolio(
 backtest_portfolio(
     "data/processed/VGT_features_ma.csv",
     initial_capital=100000,
-    output_file="data/results/VGT_ma_crossover_portfolio_ma.csv"
+    output_file="data/results/VGT_ma_crossover_portfolio.csv"
 )
