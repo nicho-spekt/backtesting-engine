@@ -2,7 +2,7 @@ import yfinance as yf
 import pathlib as pl
 import pandas as pd
 
-tickers = ["VGT", "SPY"]
+tickers = ["VGT", "SPY", "QQQ"]
 start_date = "2015-01-01"
 end_date = "2025-12-31"
 
