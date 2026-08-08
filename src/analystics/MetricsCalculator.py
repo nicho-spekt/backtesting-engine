@@ -3,7 +3,7 @@ import pandas as pd
 
 class MetricsCalculator():
     
-    def calculate_metric(self, df: pd.DataFrame) -> pd.DataFrame:
+    def calculateMetrics(self, df: pd.DataFrame) -> pd.DataFrame:
     
         metrics = {
             "Starting_value" : df["Total_value"].iloc[0],

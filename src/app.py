@@ -2,10 +2,10 @@ import sys
 from datetime import date
 from pathlib import Path
 
-import pandas as pd
-from PySide6.QtCore import QDate, Qt
+from PySide6.QtCore import QDate, Qt, QObject, QEvent
 from PySide6.QtWidgets import (
     QApplication,
+    QCheckBox,
     QComboBox,
     QDateEdit,
     QDoubleSpinBox,
@@ -33,6 +33,7 @@ from matplotlib.figure import Figure
 
 from data.DataLoader import DataLoader
 from engine.Backtester import Backtester
+from engine.ComparisonEngine import ComparisonEngine
 from analystics.MetricsCalculator import MetricsCalculator
 
 from strategies.BuyHold import BuyHold
@@ -42,12 +43,42 @@ from strategies.BollingerBands import BollingerBands
 from strategies.BreakoutMomentum import BreakoutMomentum
 
 
+class DisabledTabClickFilter(QObject):
+    """Shows a message when the disabled Portfolio tab is clicked."""
+
+    def __init__(self, app_window):
+        super().__init__(app_window)
+        self.app_window = app_window
+
+    def eventFilter(self, watched, event):
+        if event.type() == QEvent.MouseButtonPress:
+            tab_index = watched.tabAt(event.position().toPoint())
+
+            if (
+                tab_index == 0
+                and self.app_window.mode_combo.currentText()
+                == "Compare Strategies"
+            ):
+                QMessageBox.information(
+                    self.app_window,
+                    "Portfolio Tab Disabled",
+                    "The Portfolio tab is disabled in Compare Strategies mode.\n\n"
+                    "Use the Comparison tab to view all portfolio curves together, "
+                    "or switch to Single Strategy mode to use the individual Portfolio tab."
+                )
+                return True
+
+        return super().eventFilter(watched, event)
+
+
 class BacktestingApp(QMainWindow):
     def __init__(self):
         super().__init__()
 
         self.portfolio_df = None
         self.metrics_df = None
+        self.portfolio_results = None
+        self.comparison_df = None
 
         self.setWindowTitle("Quantitative Backtesting Engine")
         self.resize(1250, 850)
@@ -57,9 +88,6 @@ class BacktestingApp(QMainWindow):
 
         main_layout = QHBoxLayout(central_widget)
 
-        # -------------------------------------------------
-        # LEFT PANEL - configuration
-        # -------------------------------------------------
         controls = QFrame()
         controls.setMaximumWidth(360)
         controls_layout = QVBoxLayout(controls)
@@ -74,18 +102,22 @@ class BacktestingApp(QMainWindow):
         self.ticker_input = QLineEdit("VGT")
         self.ticker_input.setPlaceholderText("e.g. VGT, AAPL, SPY")
         general_form.addRow("Ticker:", self.ticker_input)
+        
+        today = QDate.currentDate()
 
         self.start_date_input = QDateEdit()
         self.start_date_input.setCalendarPopup(True)
         self.start_date_input.setDisplayFormat("yyyy-MM-dd")
         self.start_date_input.setDate(QDate(2015, 1, 1))
+        self.start_date_input.setMaximumDate(today)
         general_form.addRow("Start date:", self.start_date_input)
 
         self.end_date_input = QDateEdit()
         self.end_date_input.setCalendarPopup(True)
         self.end_date_input.setDisplayFormat("yyyy-MM-dd")
-        today = date.today()
-        self.end_date_input.setDate(QDate(today.year, today.month, today.day))
+ 
+        self.end_date_input.setDate(today)
+        self.end_date_input.setMaximumDate(today)
         general_form.addRow("End date:", self.end_date_input)
 
         self.interval_input = QComboBox()
@@ -104,10 +136,26 @@ class BacktestingApp(QMainWindow):
         controls_layout.addWidget(general_box)
 
         # -------------------------------------------------
-        # Strategy selection
+        # Backtest mode
         # -------------------------------------------------
-        strategy_box = QGroupBox("Strategy")
-        strategy_layout = QVBoxLayout(strategy_box)
+        mode_box = QGroupBox("Mode")
+        mode_layout = QVBoxLayout(mode_box)
+
+        self.mode_combo = QComboBox()
+        self.mode_combo.addItems(
+            [
+                "Single Strategy",
+                "Compare Strategies",
+            ]
+        )
+        mode_layout.addWidget(self.mode_combo)
+        controls_layout.addWidget(mode_box)
+
+        # -------------------------------------------------
+        # Single strategy selection
+        # -------------------------------------------------
+        self.strategy_box = QGroupBox("Strategy")
+        strategy_layout = QVBoxLayout(self.strategy_box)
 
         self.strategy_combo = QComboBox()
         self.strategy_combo.addItems(
@@ -130,7 +178,42 @@ class BacktestingApp(QMainWindow):
             self.strategy_parameters.setCurrentIndex
         )
 
-        controls_layout.addWidget(strategy_box)
+        # -------------------------------------------------
+        # Comparison strategy selection
+        # -------------------------------------------------
+        self.comparison_box = QGroupBox("Strategies to Compare")
+        comparison_layout = QVBoxLayout(self.comparison_box)
+
+        self.compare_buy_hold = QCheckBox("Buy & Hold")
+        self.compare_ma = QCheckBox("MA Crossover")
+        self.compare_rsi = QCheckBox("RSI")
+        self.compare_bollinger = QCheckBox("Bollinger Bands")
+        self.compare_breakout = QCheckBox("Breakout Momentum")
+
+        for checkbox in [
+            self.compare_buy_hold,
+            self.compare_ma,
+            self.compare_rsi,
+            self.compare_bollinger,
+            self.compare_breakout,
+        ]:
+            checkbox.setChecked(True)
+            comparison_layout.addWidget(checkbox)
+
+        comparison_note = QLabel(
+            "Check the strategies to include. Then use the Strategy "
+            "Parameters section below to configure each selected strategy."
+        )
+        comparison_note.setWordWrap(True)
+        comparison_layout.addWidget(comparison_note)
+
+        self.comparison_box.setVisible(False)
+
+        # In compare mode this appears ABOVE the parameter editor.
+        controls_layout.addWidget(self.comparison_box)
+        controls_layout.addWidget(self.strategy_box)
+
+        self.mode_combo.currentTextChanged.connect(self._update_mode_ui)
 
         self.run_button = QPushButton("Run Backtest")
         self.run_button.setMinimumHeight(42)
@@ -162,6 +245,26 @@ class BacktestingApp(QMainWindow):
         )
         self.summary_label.setWordWrap(True)
         results_layout.addWidget(self.summary_label)
+
+        # In comparison mode, lets the user inspect one strategy's
+        # Signals / Trades / Metrics while keeping the Comparison tab
+        # for the multi-strategy portfolio view.
+        self.detail_strategy_widget = QWidget()
+        detail_strategy_layout = QHBoxLayout(self.detail_strategy_widget)
+        detail_strategy_layout.setContentsMargins(0, 0, 0, 0)
+
+        detail_strategy_label = QLabel("View strategy details:")
+        self.detail_strategy_combo = QComboBox()
+
+        detail_strategy_layout.addWidget(detail_strategy_label)
+        detail_strategy_layout.addWidget(self.detail_strategy_combo, 1)
+
+        self.detail_strategy_widget.setVisible(False)
+        results_layout.addWidget(self.detail_strategy_widget)
+
+        self.detail_strategy_combo.currentTextChanged.connect(
+            self._update_comparison_detail_view
+        )
 
         metrics_box = QGroupBox("Performance Summary")
         metrics_grid = QGridLayout(metrics_box)
@@ -220,6 +323,33 @@ class BacktestingApp(QMainWindow):
         metrics_layout.addWidget(self.metrics_table)
 
         self.tabs.addTab(metrics_tab, "Metrics")
+
+        # Comparison tab
+        comparison_tab = QWidget()
+        comparison_tab_layout = QVBoxLayout(comparison_tab)
+
+        self.comparison_figure = Figure(figsize=(10, 5))
+        self.comparison_canvas = FigureCanvas(self.comparison_figure)
+        comparison_tab_layout.addWidget(self.comparison_canvas)
+
+        self.comparison_table = QTableWidget()
+        self.comparison_table.setAlternatingRowColors(True)
+        comparison_tab_layout.addWidget(self.comparison_table)
+
+        self.comparison_tab_index = self.tabs.addTab(
+            comparison_tab,
+            "Comparison"
+        )
+
+        # Single-strategy mode starts with the Comparison tab unavailable.
+        self.tabs.setTabEnabled(self.comparison_tab_index, False)
+
+        # A disabled Qt tab normally ignores clicks entirely. This filter lets
+        # us explain why Portfolio cannot be opened in comparison mode.
+        self.disabled_tab_click_filter = DisabledTabClickFilter(self)
+        self.tabs.tabBar().installEventFilter(
+            self.disabled_tab_click_filter
+        )
 
         results_layout.addWidget(self.tabs)
 
@@ -332,8 +462,6 @@ class BacktestingApp(QMainWindow):
             interval = self.interval_input.currentText()
             initial_capital = self.capital_input.value()
 
-            strategy = self._create_selected_strategy()
-
             self.run_button.setEnabled(False)
             self.run_button.setText("Running...")
             QApplication.setOverrideCursor(Qt.WaitCursor)
@@ -347,28 +475,22 @@ class BacktestingApp(QMainWindow):
 
             market_df = loader.loadData(interval)
 
-            strategy_df = strategy.generateSignals(market_df)
-
-            if strategy_df.empty:
-                raise ValueError(
-                    "Not enough data for the selected strategy and timeframe."
+            if self.mode_combo.currentText() == "Single Strategy":
+                self._run_single_backtest(
+                    market_df,
+                    ticker,
+                    start_date,
+                    end_date,
+                    initial_capital,
                 )
-
-            backtester = Backtester(initial_capital)
-            portfolio_df = backtester.run(strategy_df)
-
-            calculator = MetricsCalculator()
-            metrics_df = calculator.calculate_metric(portfolio_df)
-
-            self.portfolio_df = portfolio_df
-            self.metrics_df = metrics_df
-
-            self._update_results(
-                ticker=ticker,
-                strategy_name=self.strategy_combo.currentText(),
-                start_date=start_date,
-                end_date=end_date,
-            )
+            else:
+                self._run_comparison_backtest(
+                    market_df,
+                    ticker,
+                    start_date,
+                    end_date,
+                    initial_capital,
+                )
 
             self.export_button.setEnabled(True)
 
@@ -383,6 +505,161 @@ class BacktestingApp(QMainWindow):
             QApplication.restoreOverrideCursor()
             self.run_button.setEnabled(True)
             self.run_button.setText("Run Backtest")
+
+    def _run_single_backtest(
+        self,
+        market_df,
+        ticker,
+        start_date,
+        end_date,
+        initial_capital,
+    ):
+        strategy = self._create_selected_strategy()
+
+        strategy_df = strategy.generateSignals(market_df)
+
+        if strategy_df.empty:
+            raise ValueError(
+                "Not enough data for the selected strategy and timeframe."
+            )
+
+        backtester = Backtester(initial_capital)
+        portfolio_df = backtester.run(strategy_df)
+
+        calculator = MetricsCalculator()
+        metrics_df = calculator.calculate_metric(portfolio_df)
+
+        self.portfolio_df = portfolio_df
+        self.metrics_df = metrics_df
+        self.portfolio_results = None
+        self.comparison_df = None
+
+        self.detail_strategy_widget.setVisible(False)
+
+        # Single-strategy results:
+        # Portfolio / Signals / Trades / Metrics are available.
+        # Comparison is disabled.
+        for tab_index in range(4):
+            self.tabs.setTabEnabled(tab_index, True)
+
+        self.tabs.setTabEnabled(self.comparison_tab_index, False)
+
+        self._update_results(
+            ticker=ticker,
+            strategy_name=self.strategy_combo.currentText(),
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+    def _run_comparison_backtest(
+        self,
+        market_df,
+        ticker,
+        start_date,
+        end_date,
+        initial_capital,
+    ):
+        strategies = self._create_comparison_strategies()
+
+        if len(strategies) < 2:
+            raise ValueError(
+                "Select at least two strategies to compare."
+            )
+
+        comparison_engine = ComparisonEngine(
+            market_df,
+            initial_capital=initial_capital,
+            **strategies,
+        )
+
+        portfolio_results, comparison_df = (
+            comparison_engine.runStrategies()
+        )
+
+        self.portfolio_results = portfolio_results
+        self.comparison_df = comparison_df
+        self.portfolio_df = None
+        self.metrics_df = None
+
+        # In comparison mode, the individual Portfolio tab is redundant:
+        # the Comparison tab already shows all portfolio curves together.
+        self.tabs.setTabEnabled(0, False)
+        self.tabs.setTabEnabled(1, True)   # Signals
+        self.tabs.setTabEnabled(2, True)   # Trades
+        self.tabs.setTabEnabled(3, True)   # Metrics
+        self.tabs.setTabEnabled(self.comparison_tab_index, True)
+
+        # Let the user inspect Signals / Trades / Metrics for any
+        # strategy that participated in the comparison.
+        self.detail_strategy_combo.blockSignals(True)
+        self.detail_strategy_combo.clear()
+        self.detail_strategy_combo.addItems(
+            list(self.portfolio_results.keys())
+        )
+        self.detail_strategy_combo.blockSignals(False)
+        self.detail_strategy_widget.setVisible(True)
+
+        if self.detail_strategy_combo.count() > 0:
+            self._update_comparison_detail_view(
+                self.detail_strategy_combo.currentText()
+            )
+
+        self._update_comparison_results(
+            ticker=ticker,
+            start_date=start_date,
+            end_date=end_date,
+        )
+
+    def _create_comparison_strategies(self):
+        strategies = {}
+
+        if self.compare_buy_hold.isChecked():
+            strategies["Buy & Hold"] = BuyHold()
+
+        if self.compare_ma.isChecked():
+            short_window = self.ma_short_input.value()
+            long_window = self.ma_long_input.value()
+
+            if short_window >= long_window:
+                raise ValueError(
+                    "The short MA window must be smaller than "
+                    "the long MA window."
+                )
+
+            strategies["MA Crossover"] = MaCrossover(
+                short_window,
+                long_window,
+            )
+
+        if self.compare_rsi.isChecked():
+            lower = self.rsi_lower_input.value()
+            upper = self.rsi_upper_input.value()
+
+            if lower >= upper:
+                raise ValueError(
+                    "The RSI buy threshold must be below "
+                    "the sell threshold."
+                )
+
+            strategies["RSI"] = Rsi(
+                self.rsi_window_input.value(),
+                lower,
+                upper,
+            )
+
+        if self.compare_bollinger.isChecked():
+            strategies["Bollinger Bands"] = BollingerBands(
+                self.bb_window_input.value(),
+                self.bb_deviation_input.value(),
+            )
+
+        if self.compare_breakout.isChecked():
+            strategies["Breakout Momentum"] = BreakoutMomentum(
+                self.breakout_high_input.value(),
+                self.breakout_low_input.value(),
+            )
+
+        return strategies
 
     def _create_selected_strategy(self):
         strategy_name = self.strategy_combo.currentText()
@@ -513,6 +790,8 @@ class BacktestingApp(QMainWindow):
             buys["Close"],
             marker="^",
             label="Buy",
+            zorder=3,
+            c='green'
         )
 
         ax.scatter(
@@ -520,6 +799,8 @@ class BacktestingApp(QMainWindow):
             sells["Close"],
             marker="v",
             label="Sell",
+            zorder=3,
+            c='red'
         )
 
         ax.set_title(f"{ticker} - {strategy_name} Signals")
@@ -611,14 +892,152 @@ class BacktestingApp(QMainWindow):
 
         self.metrics_table.resizeColumnsToContents()
 
+    def _update_comparison_detail_view(self, strategy_name):
+        if (
+            not strategy_name
+            or self.portfolio_results is None
+            or strategy_name not in self.portfolio_results
+        ):
+            return
+
+        # Reuse the same individual-result widgets as single mode.
+        self.portfolio_df = self.portfolio_results[strategy_name]
+
+        if (
+            self.comparison_df is not None
+            and "Strategy" in self.comparison_df.columns
+        ):
+            strategy_metrics = self.comparison_df[
+                self.comparison_df["Strategy"] == strategy_name
+            ].copy()
+
+            if not strategy_metrics.empty:
+                self.metrics_df = (
+                    strategy_metrics
+                    .drop(columns=["Strategy"])
+                    .reset_index(drop=True)
+                )
+
+        ticker = self.ticker_input.text().strip().upper()
+
+        self._plot_signals(ticker, strategy_name)
+        self._populate_trades_table()
+        self._populate_metrics_table()
+
+    def _update_comparison_results(
+        self,
+        ticker,
+        start_date,
+        end_date,
+    ):
+        self.summary_label.setText(
+            f"{ticker} | Strategy Comparison | "
+            f"{start_date} to {end_date}"
+        )
+
+        if self.comparison_df is not None and not self.comparison_df.empty:
+            if "Ending_value" in self.comparison_df.columns:
+                best_row = self.comparison_df.loc[
+                    self.comparison_df["Ending_value"].idxmax()
+                ]
+                self._set_metric(
+                    self.ending_value_label,
+                    "Best Ending Value",
+                    f"{best_row['Strategy']}: "
+                    f"${best_row['Ending_value']:,.2f}",
+                )
+
+            if "Cumulative_return%" in self.comparison_df.columns:
+                best_row = self.comparison_df.loc[
+                    self.comparison_df["Cumulative_return%"].idxmax()
+                ]
+                self._set_metric(
+                    self.return_label,
+                    "Best Return",
+                    f"{best_row['Strategy']}: "
+                    f"{best_row['Cumulative_return%']:.2f}%",
+                )
+
+            if "Sharpe_ratio" in self.comparison_df.columns:
+                best_row = self.comparison_df.loc[
+                    self.comparison_df["Sharpe_ratio"].idxmax()
+                ]
+                self._set_metric(
+                    self.sharpe_label,
+                    "Best Sharpe",
+                    f"{best_row['Strategy']}: "
+                    f"{best_row['Sharpe_ratio']:.3f}",
+                )
+
+            if "Max_drawdown%" in self.comparison_df.columns:
+                best_row = self.comparison_df.loc[
+                    self.comparison_df["Max_drawdown%"].idxmax()
+                ]
+                self._set_metric(
+                    self.drawdown_label,
+                    "Smallest Drawdown",
+                    f"{best_row['Strategy']}: "
+                    f"{best_row['Max_drawdown%']:.2f}%",
+                )
+
+        self._plot_comparison()
+        self._populate_comparison_table()
+        self.tabs.setCurrentIndex(self.comparison_tab_index)
+
+    def _plot_comparison(self):
+        self.comparison_figure.clear()
+        ax = self.comparison_figure.add_subplot(111)
+
+        for name, portfolio_df in self.portfolio_results.items():
+            ax.plot(
+                portfolio_df.index,
+                portfolio_df["Total_value"],
+                label=name,
+            )
+
+        ax.set_title("Strategy Portfolio Comparison")
+        ax.set_xlabel("Date")
+        ax.set_ylabel("Portfolio Value ($)")
+        ax.grid(True)
+        ax.legend()
+
+        self.comparison_figure.tight_layout()
+        self.comparison_canvas.draw()
+
+    def _populate_comparison_table(self):
+        df = self.comparison_df
+
+        self.comparison_table.setSortingEnabled(False)
+        self.comparison_table.clear()
+        self.comparison_table.setColumnCount(len(df.columns))
+        self.comparison_table.setHorizontalHeaderLabels(
+            [str(column) for column in df.columns]
+        )
+        self.comparison_table.setRowCount(len(df))
+
+        for row_number, (_, row) in enumerate(df.iterrows()):
+            for column_number, column in enumerate(df.columns):
+                value = row[column]
+
+                if isinstance(value, float):
+                    text = f"{value:,.4f}"
+                else:
+                    text = str(value)
+
+                self.comparison_table.setItem(
+                    row_number,
+                    column_number,
+                    QTableWidgetItem(text),
+                )
+
+        self.comparison_table.resizeColumnsToContents()
+        self.comparison_table.setSortingEnabled(True)
+
     # =====================================================
     # Export
     # =====================================================
 
     def export_results(self):
-        if self.portfolio_df is None or self.metrics_df is None:
-            return
-
         directory = QFileDialog.getExistingDirectory(
             self,
             "Choose Export Folder",
@@ -628,28 +1047,61 @@ class BacktestingApp(QMainWindow):
             return
 
         ticker = self.ticker_input.text().strip().upper()
-
-        strategy_name = (
-            self.strategy_combo.currentText()
-            .lower()
-            .replace(" ", "_")
-            .replace("&", "and")
-        )
-
         output_directory = Path(directory)
 
-        portfolio_file = (
-            output_directory
-            / f"{ticker}_{strategy_name}_portfolio.csv"
-        )
+        if self.mode_combo.currentText() == "Single Strategy":
+            if self.portfolio_df is None or self.metrics_df is None:
+                return
 
-        metrics_file = (
-            output_directory
-            / f"{ticker}_{strategy_name}_metrics.csv"
-        )
+            strategy_name = (
+                self.strategy_combo.currentText()
+                .lower()
+                .replace(" ", "_")
+                .replace("&", "and")
+            )
 
-        self.portfolio_df.to_csv(portfolio_file)
-        self.metrics_df.to_csv(metrics_file, index=False)
+            portfolio_file = (
+                output_directory
+                / f"{ticker}_{strategy_name}_portfolio.csv"
+            )
+
+            metrics_file = (
+                output_directory
+                / f"{ticker}_{strategy_name}_metrics.csv"
+            )
+
+            self.portfolio_df.to_csv(portfolio_file)
+            self.metrics_df.to_csv(metrics_file, index=False)
+
+        else:
+            if (
+                self.portfolio_results is None
+                or self.comparison_df is None
+            ):
+                return
+
+            comparison_file = (
+                output_directory
+                / f"{ticker}_strategy_comparison.csv"
+            )
+            self.comparison_df.to_csv(
+                comparison_file,
+                index=False,
+            )
+
+            for name, portfolio_df in self.portfolio_results.items():
+                safe_name = (
+                    name.lower()
+                    .replace(" ", "_")
+                    .replace("&", "and")
+                )
+
+                portfolio_file = (
+                    output_directory
+                    / f"{ticker}_{safe_name}_portfolio.csv"
+                )
+
+                portfolio_df.to_csv(portfolio_file)
 
         QMessageBox.information(
             self,
@@ -660,6 +1112,76 @@ class BacktestingApp(QMainWindow):
     # =====================================================
     # UI helpers
     # =====================================================
+
+    def _update_mode_ui(self, mode):
+        comparison_mode = mode == "Compare Strategies"
+
+        # Keep the strategy selector/parameter editor visible in both modes.
+        # In comparison mode, it chooses which strategy's parameters
+        # are currently being edited.
+        self.strategy_box.setVisible(True)
+        self.comparison_box.setVisible(comparison_mode)
+
+        if comparison_mode:
+            self.strategy_box.setTitle("Strategy Parameters")
+
+            # Portfolio is an individual-strategy view, so it is not used
+            # in comparison mode. Make that visually explicit as well as
+            # disabling the tab.
+            self.tabs.setTabEnabled(0, False)
+            self.tabs.setTabText(
+                0,
+                "✕ Portfolio — Single Strategy Only"
+            )
+            self.tabs.setTabToolTip(
+                0,
+                "Disabled in Compare Strategies mode. "
+                "Click the tab for more information."
+            )
+
+            self.tabs.setTabEnabled(self.comparison_tab_index, True)
+
+            # Detail tabs become useful once comparison results exist.
+            has_comparison_results = self.portfolio_results is not None
+            self.tabs.setTabEnabled(1, has_comparison_results)
+            self.tabs.setTabEnabled(2, has_comparison_results)
+            self.tabs.setTabEnabled(3, has_comparison_results)
+
+            self.detail_strategy_widget.setVisible(
+                has_comparison_results
+            )
+
+            if self.tabs.currentIndex() == 0:
+                self.tabs.setCurrentIndex(self.comparison_tab_index)
+
+            self.summary_label.setText(
+                "Select the strategies to compare. Use Strategy Parameters "
+                "to configure them, then run the backtest. Afterward, use "
+                "'View strategy details' to inspect each strategy's signals, "
+                "trades and metrics."
+            )
+
+        else:
+            self.strategy_box.setTitle("Strategy")
+
+            # Restore the normal Portfolio tab label in single mode.
+            self.tabs.setTabText(0, "Portfolio")
+            self.tabs.setTabToolTip(0, "")
+
+            # Individual-result tabs are valid in single mode.
+            for tab_index in range(4):
+                self.tabs.setTabEnabled(tab_index, True)
+
+            self.tabs.setTabEnabled(self.comparison_tab_index, False)
+            self.detail_strategy_widget.setVisible(False)
+
+            if self.tabs.currentIndex() == self.comparison_tab_index:
+                self.tabs.setCurrentIndex(0)
+
+            self.summary_label.setText(
+                "Choose a ticker, date range and strategy, "
+                "then run a backtest."
+            )
 
     @staticmethod
     def _create_metric_label(title):
