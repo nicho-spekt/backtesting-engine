@@ -527,7 +527,7 @@ class BacktestingApp(QMainWindow):
         portfolio_df = backtester.run(strategy_df)
 
         calculator = MetricsCalculator()
-        metrics_df = calculator.calculate_metric(portfolio_df)
+        metrics_df = calculator.calculateMetrics(portfolio_df)
 
         self.portfolio_df = portfolio_df
         self.metrics_df = metrics_df
@@ -782,8 +782,8 @@ class BacktestingApp(QMainWindow):
             label=ticker,
         )
 
-        buys = self.portfolio_df[self.portfolio_df["Trade"] == 1]
-        sells = self.portfolio_df[self.portfolio_df["Trade"] == -1]
+        buys = self.portfolio_df[self.portfolio_df["Trade_execution"] == 1]
+        sells = self.portfolio_df[self.portfolio_df["Trade_execution"] == -1]
 
         ax.scatter(
             buys.index,
@@ -814,13 +814,11 @@ class BacktestingApp(QMainWindow):
 
     def _populate_trades_table(self):
         trades_df = self.portfolio_df[
-            self.portfolio_df["Trade"] != 0
+            self.portfolio_df["Trade_execution"] != 0
         ].copy()
 
         wanted_columns = [
             "Close",
-            "Signal",
-            "Trade",
             "Shares",
             "Cash",
             "Total_value",
@@ -834,8 +832,11 @@ class BacktestingApp(QMainWindow):
 
         self.trades_table.setSortingEnabled(False)
         self.trades_table.clear()
-        self.trades_table.setColumnCount(len(columns) + 1)
-        self.trades_table.setHorizontalHeaderLabels(["Date"] + columns)
+
+        self.trades_table.setColumnCount(len(columns) + 2)
+        self.trades_table.setHorizontalHeaderLabels(
+            ["Date", "Action"] + columns
+        )
         self.trades_table.setRowCount(len(trades_df))
 
         for row_number, (index, row) in enumerate(trades_df.iterrows()):
@@ -845,18 +846,30 @@ class BacktestingApp(QMainWindow):
                 QTableWidgetItem(str(index)),
             )
 
-            for column_number, column in enumerate(columns, start=1):
+            action = (
+                "BUY"
+                if row["Trade_execution"] == 1
+                else "SELL"
+            )
+
+            self.trades_table.setItem(
+                row_number,
+                1,
+                QTableWidgetItem(action),
+            )
+
+            for column_number, column in enumerate(columns, start=2):
                 value = row[column]
 
                 if isinstance(value, float):
-                    text = f"{value:,.4f}"
+                    value_text = f"{value:,.4f}"
                 else:
-                    text = str(value)
+                    value_text = str(value)
 
                 self.trades_table.setItem(
                     row_number,
                     column_number,
-                    QTableWidgetItem(text),
+                    QTableWidgetItem(value_text),
                 )
 
         self.trades_table.resizeColumnsToContents()

@@ -11,13 +11,14 @@ class Backtester:
     def run(self, df: pd.DataFrame) -> pd.DataFrame:
 
         df = df.copy().sort_index()
+        df["Trade_execution"] = df["Trade"].shift(1, fill_value=0)
 
         cash = self.initial_capital
         shares = 0
 
         for row in df.itertuples():
             price = row.Close
-            trade_signal = row.Trade
+            trade_signal = row.Trade_execution
 
             if trade_signal == 1:
                 shares_to_buy = int(cash // price)
