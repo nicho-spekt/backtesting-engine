@@ -3,6 +3,8 @@ from .BaseStrategy import BaseStrategy
 
 class BuyHold(BaseStrategy):
     
+    execution_delay = 0
+    
     def generateSignals(self, df: pd.DataFrame) -> pd.DataFrame:
         
         df = df.copy()

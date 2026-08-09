@@ -1,17 +1,17 @@
 import pandas as pd
-from pathlib import Path
-
 
 class Backtester:
     
-    def __init__(self, inital_capital = 100000):
+    def __init__(self, inital_capital = 100000, commission=0.0, slippage=0.0):
         
         self.initial_capital = inital_capital
+        self.commission = commission
+        self.slippage = slippage
         
-    def run(self, df: pd.DataFrame) -> pd.DataFrame:
+    def run(self, df: pd.DataFrame, execution_delay = 1) -> pd.DataFrame:
 
         df = df.copy().sort_index()
-        df["Trade_execution"] = df["Trade"].shift(1, fill_value=0)
+        df["Trade_execution"] = df["Trade"].shift(execution_delay, fill_value=0)
 
         cash = self.initial_capital
         shares = 0
@@ -21,12 +21,14 @@ class Backtester:
             trade_signal = row.Trade_execution
 
             if trade_signal == 1:
-                shares_to_buy = int(cash // price)
-                cash -= shares_to_buy * price
+                execution_price = price * (1 + self.slippage)
+                shares_to_buy = int((cash - self.commission) // execution_price)
+                cash -= shares_to_buy * execution_price + self.commission
                 shares += shares_to_buy
 
             elif trade_signal == -1:
-                cash += shares * price
+                execution_price = price * (1 - self.slippage)
+                cash += shares * execution_price - self.commission
                 shares = 0
 
             position_value = shares * price
@@ -38,6 +40,6 @@ class Backtester:
             df.at[row.Index, "Total_value"] = total_value
             df.at[row.Index, "Portfolio_return"] = (total_value / self.initial_capital - 1) * 100
 
-        df["Portfolio_return_1d%"] = df["Total_value"].pct_change().fillna(0) * 100
+        df["Portfolio_return_period%"] = df["Total_value"].pct_change().fillna(0) * 100
         
         return df

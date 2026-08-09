@@ -136,6 +136,37 @@ class BacktestingApp(QMainWindow):
         controls_layout.addWidget(general_box)
 
         # -------------------------------------------------
+        # Execution assumptions
+        # -------------------------------------------------
+        execution_box = QGroupBox("Execution Settings")
+        execution_form = QFormLayout(execution_box)
+
+        self.commission_input = QDoubleSpinBox()
+        self.commission_input.setRange(0.0, 10_000.0)
+        self.commission_input.setDecimals(2)
+        self.commission_input.setSingleStep(0.50)
+        self.commission_input.setValue(0.0)
+        self.commission_input.setPrefix("$")
+        self.commission_input.setToolTip(
+            "Fixed commission charged for each executed buy or sell."
+        )
+        execution_form.addRow("Commission / trade:", self.commission_input)
+
+        self.slippage_input = QDoubleSpinBox()
+        self.slippage_input.setRange(0.0, 10.0)
+        self.slippage_input.setDecimals(3)
+        self.slippage_input.setSingleStep(0.01)
+        self.slippage_input.setValue(0.0)
+        self.slippage_input.setSuffix("%")
+        self.slippage_input.setToolTip(
+            "Simulated execution-price slippage. "
+            "For example, 0.10% means 0.001 inside the Backtester."
+        )
+        execution_form.addRow("Slippage:", self.slippage_input)
+
+        controls_layout.addWidget(execution_box)
+
+        # -------------------------------------------------
         # Backtest mode
         # -------------------------------------------------
         mode_box = QGroupBox("Mode")
@@ -461,6 +492,8 @@ class BacktestingApp(QMainWindow):
 
             interval = self.interval_input.currentText()
             initial_capital = self.capital_input.value()
+            commission = self.commission_input.value()
+            slippage = self.slippage_input.value() / 100
 
             self.run_button.setEnabled(False)
             self.run_button.setText("Running...")
@@ -482,6 +515,9 @@ class BacktestingApp(QMainWindow):
                     start_date,
                     end_date,
                     initial_capital,
+                    interval,
+                    commission,
+                    slippage,
                 )
             else:
                 self._run_comparison_backtest(
@@ -490,6 +526,9 @@ class BacktestingApp(QMainWindow):
                     start_date,
                     end_date,
                     initial_capital,
+                    interval,
+                    commission,
+                    slippage,
                 )
 
             self.export_button.setEnabled(True)
@@ -513,6 +552,9 @@ class BacktestingApp(QMainWindow):
         start_date,
         end_date,
         initial_capital,
+        interval,
+        commission,
+        slippage,
     ):
         strategy = self._create_selected_strategy()
 
@@ -523,11 +565,21 @@ class BacktestingApp(QMainWindow):
                 "Not enough data for the selected strategy and timeframe."
             )
 
-        backtester = Backtester(initial_capital)
-        portfolio_df = backtester.run(strategy_df)
+        backtester = Backtester(
+            initial_capital,
+            commission=commission,
+            slippage=slippage,
+        )
+        portfolio_df = backtester.run(
+            strategy_df,
+            strategy.execution_delay,
+        )
 
         calculator = MetricsCalculator()
-        metrics_df = calculator.calculateMetrics(portfolio_df)
+        metrics_df = calculator.calculateMetrics(
+            portfolio_df,
+            interval,
+        )
 
         self.portfolio_df = portfolio_df
         self.metrics_df = metrics_df
@@ -549,6 +601,8 @@ class BacktestingApp(QMainWindow):
             strategy_name=self.strategy_combo.currentText(),
             start_date=start_date,
             end_date=end_date,
+            commission=commission,
+            slippage=slippage,
         )
 
     def _run_comparison_backtest(
@@ -558,6 +612,9 @@ class BacktestingApp(QMainWindow):
         start_date,
         end_date,
         initial_capital,
+        interval,
+        commission,
+        slippage,
     ):
         strategies = self._create_comparison_strategies()
 
@@ -569,6 +626,9 @@ class BacktestingApp(QMainWindow):
         comparison_engine = ComparisonEngine(
             market_df,
             initial_capital=initial_capital,
+            commission=commission,
+            slippage=slippage,
+            interval=interval,
             **strategies,
         )
 
@@ -608,6 +668,8 @@ class BacktestingApp(QMainWindow):
             ticker=ticker,
             start_date=start_date,
             end_date=end_date,
+            commission=commission,
+            slippage=slippage,
         )
 
     def _create_comparison_strategies(self):
@@ -717,11 +779,14 @@ class BacktestingApp(QMainWindow):
         strategy_name,
         start_date,
         end_date,
+        commission,
+        slippage,
     ):
         metrics = self.metrics_df.iloc[0]
 
         self.summary_label.setText(
-            f"{ticker} | {strategy_name} | {start_date} to {end_date}"
+            f"{ticker} | {strategy_name} | {start_date} to {end_date} | "
+            f"Commission ${commission:,.2f} | Slippage {slippage * 100:.3f}%"
         )
 
         self._set_metric(
@@ -834,8 +899,16 @@ class BacktestingApp(QMainWindow):
         self.trades_table.clear()
 
         self.trades_table.setColumnCount(len(columns) + 2)
+        display_headers = {
+            "Close": "Market Price",
+            "Shares": "Shares",
+            "Cash": "Cash",
+            "Total_value": "Total Value",
+        }
+
         self.trades_table.setHorizontalHeaderLabels(
-            ["Date", "Action"] + columns
+            ["Date", "Action"]
+            + [display_headers.get(column, column) for column in columns]
         )
         self.trades_table.setRowCount(len(trades_df))
 
@@ -942,10 +1015,12 @@ class BacktestingApp(QMainWindow):
         ticker,
         start_date,
         end_date,
+        commission,
+        slippage,
     ):
         self.summary_label.setText(
-            f"{ticker} | Strategy Comparison | "
-            f"{start_date} to {end_date}"
+            f"{ticker} | Strategy Comparison | {start_date} to {end_date} | "
+            f"Commission ${commission:,.2f} | Slippage {slippage * 100:.3f}%"
         )
 
         if self.comparison_df is not None and not self.comparison_df.empty:
