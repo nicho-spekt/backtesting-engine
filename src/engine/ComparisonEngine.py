@@ -1,7 +1,7 @@
 import pandas as pd
 
 from engine.Backtester import Backtester
-from analystics.MetricsCalculator import MetricsCalculator
+from analytics.MetricsCalculator import MetricsCalculator
 
 
 class ComparisonEngine:

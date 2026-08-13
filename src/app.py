@@ -1,6 +1,11 @@
 import sys
+import math
+import time
 from datetime import date
 from pathlib import Path
+
+import pandas as pd
+import metrics_cpp
 
 from PySide6.QtCore import QDate, Qt, QObject, QEvent
 from PySide6.QtWidgets import (
@@ -34,7 +39,7 @@ from matplotlib.figure import Figure
 from data.DataLoader import DataLoader
 from engine.Backtester import Backtester
 from engine.ComparisonEngine import ComparisonEngine
-from analystics.MetricsCalculator import MetricsCalculator
+from analytics.MetricsCalculator import MetricsCalculator
 
 from strategies.BuyHold import BuyHold
 from strategies.MaCrossover import MaCrossover
@@ -79,6 +84,7 @@ class BacktestingApp(QMainWindow):
         self.metrics_df = None
         self.portfolio_results = None
         self.comparison_df = None
+        self.benchmark_df = None
 
         self.setWindowTitle("Quantitative Backtesting Engine")
         self.resize(1250, 850)
@@ -372,8 +378,31 @@ class BacktestingApp(QMainWindow):
             "Comparison"
         )
 
-        # Single-strategy mode starts with the Comparison tab unavailable.
+        # Benchmark tab
+        benchmark_tab = QWidget()
+        benchmark_layout = QVBoxLayout(benchmark_tab)
+
+        benchmark_note = QLabel(
+            "Compares the original pandas/Python metric calculations with "
+            "the C++ MetricsEngine called through pybind11. Times are "
+            "averages over repeated runs on the same portfolio data."
+        )
+        benchmark_note.setWordWrap(True)
+        benchmark_layout.addWidget(benchmark_note)
+
+        self.benchmark_table = QTableWidget()
+        self.benchmark_table.setAlternatingRowColors(True)
+        self.benchmark_table.setSortingEnabled(False)
+        benchmark_layout.addWidget(self.benchmark_table)
+
+        self.benchmark_tab_index = self.tabs.addTab(
+            benchmark_tab,
+            "Benchmark"
+        )
+
+        # Tabs that require results start unavailable.
         self.tabs.setTabEnabled(self.comparison_tab_index, False)
+        self.tabs.setTabEnabled(self.benchmark_tab_index, False)
 
         # A disabled Qt tab normally ignores clicks entirely. This filter lets
         # us explain why Portfolio cannot be opened in comparison mode.
@@ -581,6 +610,14 @@ class BacktestingApp(QMainWindow):
             interval,
         )
 
+        self.benchmark_df = pd.DataFrame([
+            self._benchmark_metrics(
+                portfolio_df,
+                interval,
+                self.strategy_combo.currentText(),
+            )
+        ])
+
         self.portfolio_df = portfolio_df
         self.metrics_df = metrics_df
         self.portfolio_results = None
@@ -595,6 +632,7 @@ class BacktestingApp(QMainWindow):
             self.tabs.setTabEnabled(tab_index, True)
 
         self.tabs.setTabEnabled(self.comparison_tab_index, False)
+        self.tabs.setTabEnabled(self.benchmark_tab_index, True)
 
         self._update_results(
             ticker=ticker,
@@ -641,6 +679,18 @@ class BacktestingApp(QMainWindow):
         self.portfolio_df = None
         self.metrics_df = None
 
+        self.benchmark_df = pd.DataFrame(
+            [
+                self._benchmark_metrics(
+                    portfolio_df,
+                    interval,
+                    strategy_name,
+                )
+                for strategy_name, portfolio_df
+                in portfolio_results.items()
+            ]
+        )
+
         # In comparison mode, the individual Portfolio tab is redundant:
         # the Comparison tab already shows all portfolio curves together.
         self.tabs.setTabEnabled(0, False)
@@ -648,6 +698,7 @@ class BacktestingApp(QMainWindow):
         self.tabs.setTabEnabled(2, True)   # Trades
         self.tabs.setTabEnabled(3, True)   # Metrics
         self.tabs.setTabEnabled(self.comparison_tab_index, True)
+        self.tabs.setTabEnabled(self.benchmark_tab_index, True)
 
         # Let the user inspect Signals / Trades / Metrics for any
         # strategy that participated in the comparison.
@@ -798,7 +849,7 @@ class BacktestingApp(QMainWindow):
         self._set_metric(
             self.return_label,
             "Cumulative Return",
-            f"{metrics['Cumulative_return%']:.2f}%",
+            f"{metrics['Cumulative_return'] * 100:.2f}%",
         )
 
         self._set_metric(
@@ -810,13 +861,14 @@ class BacktestingApp(QMainWindow):
         self._set_metric(
             self.drawdown_label,
             "Max Drawdown",
-            f"{metrics['Max_drawdown%']:.2f}%",
+            f"{metrics['Max_drawdown'] * 100:.2f}%",
         )
 
         self._plot_portfolio(ticker, strategy_name)
         self._plot_signals(ticker, strategy_name)
         self._populate_trades_table()
         self._populate_metrics_table()
+        self._populate_benchmark_table()
 
     def _plot_portfolio(self, ticker, strategy_name):
         self.portfolio_figure.clear()
@@ -965,15 +1017,22 @@ class BacktestingApp(QMainWindow):
                 QTableWidgetItem(str(name)),
             )
 
-            if name in [
+            percentage_metrics = {
+                "Cumulative_return",
                 "Period_volatility",
                 "Annualized_volatility",
-            ]:
-                value_text = f"{value * 100:.4f}"
-                
+                "Max_drawdown",
+                "Time_invested",
+            }
+
+            if name in percentage_metrics:
+                value_text = f"{float(value) * 100:.4f}%"
+            elif name in {"Starting_value", "Ending_value"}:
+                value_text = f"${float(value):,.2f}"
+            elif name == "Number_of_trades":
+                value_text = f"{int(value)}"
             elif isinstance(value, (float, int)):
                 value_text = f"{value:,.4f}"
-                
             else:
                 value_text = str(value)
 
@@ -1042,15 +1101,15 @@ class BacktestingApp(QMainWindow):
                     f"${best_row['Ending_value']:,.2f}",
                 )
 
-            if "Cumulative_return%" in self.comparison_df.columns:
+            if "Cumulative_return" in self.comparison_df.columns:
                 best_row = self.comparison_df.loc[
-                    self.comparison_df["Cumulative_return%"].idxmax()
+                    self.comparison_df["Cumulative_return"].idxmax()
                 ]
                 self._set_metric(
                     self.return_label,
                     "Best Return",
                     f"{best_row['Strategy']}: "
-                    f"{best_row['Cumulative_return%']:.2f}%",
+                    f"{best_row['Cumulative_return'] * 100:.2f}%",
                 )
 
             if "Sharpe_ratio" in self.comparison_df.columns:
@@ -1064,19 +1123,20 @@ class BacktestingApp(QMainWindow):
                     f"{best_row['Sharpe_ratio']:.3f}",
                 )
 
-            if "Max_drawdown%" in self.comparison_df.columns:
+            if "Max_drawdown" in self.comparison_df.columns:
                 best_row = self.comparison_df.loc[
-                    self.comparison_df["Max_drawdown%"].idxmax()
+                    self.comparison_df["Max_drawdown"].idxmin()
                 ]
                 self._set_metric(
                     self.drawdown_label,
                     "Smallest Drawdown",
                     f"{best_row['Strategy']}: "
-                    f"{best_row['Max_drawdown%']:.2f}%",
+                    f"{best_row['Max_drawdown'] * 100:.2f}%",
                 )
 
         self._plot_comparison()
         self._populate_comparison_table()
+        self._populate_benchmark_table()
         self.tabs.setCurrentIndex(self.comparison_tab_index)
 
     def _plot_comparison(self):
@@ -1114,15 +1174,22 @@ class BacktestingApp(QMainWindow):
             for column_number, column in enumerate(df.columns):
                 value = row[column]
 
-                if column in [
+                percentage_columns = {
+                    "Cumulative_return",
                     "Period_volatility",
                     "Annualized_volatility",
-                ]:
-                    text = f"{value * 100:.4f}"
-                    
-                elif isinstance(value, (float, int)):
+                    "Max_drawdown",
+                    "Time_invested",
+                }
+
+                if column in percentage_columns:
+                    text = f"{float(value) * 100:.4f}%"
+                elif column in {"Starting_value", "Ending_value"}:
+                    text = f"${float(value):,.2f}"
+                elif column == "Number_of_trades":
+                    text = f"{int(value)}"
+                elif isinstance(value, float):
                     text = f"{value:,.4f}"
-                    
                 else:
                     text = str(value)
 
@@ -1134,6 +1201,190 @@ class BacktestingApp(QMainWindow):
 
         self.comparison_table.resizeColumnsToContents()
         self.comparison_table.setSortingEnabled(True)
+
+    # =====================================================
+    # Python vs C++ metrics benchmark
+    # =====================================================
+
+    @staticmethod
+    def _python_reference_metrics(portfolio_df, periods_per_year):
+        """Recreates the pre-C++ pandas metric calculations."""
+        returns = portfolio_df["Portfolio_return_period"].astype(float)
+        values = portfolio_df["Total_value"].astype(float)
+
+        period_volatility = returns.std()
+        annualized_volatility = (
+            period_volatility * math.sqrt(periods_per_year)
+        )
+
+        sharpe_ratio = float("nan")
+        if period_volatility != 0:
+            sharpe_ratio = (
+                returns.mean()
+                / period_volatility
+                * math.sqrt(periods_per_year)
+            )
+
+        cumulative_return = (
+            values.iloc[-1] / values.iloc[0] - 1.0
+        )
+
+        max_drawdown = (
+            1.0 - values / values.cummax()
+        ).max()
+
+        return (
+            cumulative_return,
+            period_volatility,
+            annualized_volatility,
+            sharpe_ratio,
+            max_drawdown,
+        )
+
+    def _benchmark_metrics(self, portfolio_df, interval, strategy_name):
+        periods_per_year = {
+            "1d": 252,
+            "1wk": 52,
+            "1mo": 12,
+        }[interval]
+
+        returns = (
+            portfolio_df["Portfolio_return_period"]
+            .astype(float)
+            .tolist()
+        )
+        portfolio_values = (
+            portfolio_df["Total_value"]
+            .astype(float)
+            .tolist()
+        )
+
+        # Enough repetitions to reduce timer noise without making the GUI
+        # noticeably slow on normal backtests.
+        runs = 200 if len(portfolio_df) <= 10_000 else 50
+
+        try:
+            # Warm up both paths before timing.
+            self._python_reference_metrics(
+                portfolio_df,
+                periods_per_year,
+            )
+            metrics_cpp.calculateAll(
+                returns,
+                portfolio_values,
+                periods_per_year,
+            )
+
+            start = time.perf_counter_ns()
+            for _ in range(runs):
+                self._python_reference_metrics(
+                    portfolio_df,
+                    periods_per_year,
+                )
+            python_avg_ms = (
+                (time.perf_counter_ns() - start)
+                / 1_000_000
+                / runs
+            )
+
+            start = time.perf_counter_ns()
+            for _ in range(runs):
+                metrics_cpp.calculateAll(
+                    returns,
+                    portfolio_values,
+                    periods_per_year,
+                )
+            cpp_avg_ms = (
+                (time.perf_counter_ns() - start)
+                / 1_000_000
+                / runs
+            )
+
+            speedup = (
+                python_avg_ms / cpp_avg_ms
+                if cpp_avg_ms > 0
+                else float("inf")
+            )
+
+            return {
+                "Strategy": strategy_name,
+                "Rows": len(portfolio_df),
+                "Runs": runs,
+                "Python_avg_ms": python_avg_ms,
+                "Cpp_pybind11_avg_ms": cpp_avg_ms,
+                "Speedup_x": speedup,
+                "Note": "",
+            }
+
+        except Exception as error:
+            return {
+                "Strategy": strategy_name,
+                "Rows": len(portfolio_df),
+                "Runs": runs,
+                "Python_avg_ms": float("nan"),
+                "Cpp_pybind11_avg_ms": float("nan"),
+                "Speedup_x": float("nan"),
+                "Note": str(error),
+            }
+
+    def _populate_benchmark_table(self):
+        if self.benchmark_df is None or self.benchmark_df.empty:
+            return
+
+        df = self.benchmark_df
+
+        self.benchmark_table.setSortingEnabled(False)
+        self.benchmark_table.clear()
+        self.benchmark_table.setColumnCount(len(df.columns))
+        self.benchmark_table.setHorizontalHeaderLabels(
+            [
+                "Strategy" if column == "Strategy"
+                else "Rows" if column == "Rows"
+                else "Runs" if column == "Runs"
+                else "Python avg (ms)"
+                if column == "Python_avg_ms"
+                else "C++/pybind11 avg (ms)"
+                if column == "Cpp_pybind11_avg_ms"
+                else "Speedup (x)"
+                if column == "Speedup_x"
+                else "Note"
+                for column in df.columns
+            ]
+        )
+        self.benchmark_table.setRowCount(len(df))
+
+        for row_number, (_, row) in enumerate(df.iterrows()):
+            for column_number, column in enumerate(df.columns):
+                value = row[column]
+
+                if column in {
+                    "Python_avg_ms",
+                    "Cpp_pybind11_avg_ms",
+                }:
+                    text = (
+                        "—"
+                        if pd.isna(value)
+                        else f"{float(value):.6f}"
+                    )
+                elif column == "Speedup_x":
+                    text = (
+                        "—"
+                        if pd.isna(value)
+                        else f"{float(value):.2f}x"
+                    )
+                elif column in {"Rows", "Runs"}:
+                    text = f"{int(value)}"
+                else:
+                    text = str(value)
+
+                self.benchmark_table.setItem(
+                    row_number,
+                    column_number,
+                    QTableWidgetItem(text),
+                )
+
+        self.benchmark_table.resizeColumnsToContents()
+        self.benchmark_table.setSortingEnabled(True)
 
     # =====================================================
     # Export
@@ -1175,6 +1426,13 @@ class BacktestingApp(QMainWindow):
             self.portfolio_df.to_csv(portfolio_file)
             self.metrics_df.to_csv(metrics_file, index=False)
 
+            if self.benchmark_df is not None:
+                benchmark_file = (
+                    output_directory
+                    / f"{ticker}_{strategy_name}_benchmark.csv"
+                )
+                self.benchmark_df.to_csv(benchmark_file, index=False)
+
         else:
             if (
                 self.portfolio_results is None
@@ -1190,6 +1448,13 @@ class BacktestingApp(QMainWindow):
                 comparison_file,
                 index=False,
             )
+
+            if self.benchmark_df is not None:
+                benchmark_file = (
+                    output_directory
+                    / f"{ticker}_metrics_benchmark.csv"
+                )
+                self.benchmark_df.to_csv(benchmark_file, index=False)
 
             for name, portfolio_df in self.portfolio_results.items():
                 safe_name = (
@@ -1243,8 +1508,12 @@ class BacktestingApp(QMainWindow):
 
             self.tabs.setTabEnabled(self.comparison_tab_index, True)
 
-            # Detail tabs become useful once comparison results exist.
+            # Detail/benchmark tabs become useful once comparison results exist.
             has_comparison_results = self.portfolio_results is not None
+            self.tabs.setTabEnabled(
+                self.benchmark_tab_index,
+                has_comparison_results,
+            )
             self.tabs.setTabEnabled(1, has_comparison_results)
             self.tabs.setTabEnabled(2, has_comparison_results)
             self.tabs.setTabEnabled(3, has_comparison_results)
@@ -1275,6 +1544,10 @@ class BacktestingApp(QMainWindow):
                 self.tabs.setTabEnabled(tab_index, True)
 
             self.tabs.setTabEnabled(self.comparison_tab_index, False)
+            self.tabs.setTabEnabled(
+                self.benchmark_tab_index,
+                self.benchmark_df is not None,
+            )
             self.detail_strategy_widget.setVisible(False)
 
             if self.tabs.currentIndex() == self.comparison_tab_index:

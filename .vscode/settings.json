@@ -1,5 +1,8 @@
 {
-    "python.analysis.extraPaths": [
-        "./src/data"
-    ]
+    "cmake.sourceDirectory": "${workspaceFolder}/src/cpp",
+
+    "cmake.configureSettings": {
+        "Python_EXECUTABLE": "C:/Python314/python.exe",
+        "pybind11_DIR": "C:/Users/nicho/AppData/Roaming/Python/Python314/site-packages/pybind11/share/cmake/pybind11"
+    }
 }
