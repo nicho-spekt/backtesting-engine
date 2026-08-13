@@ -1,0 +1,18 @@
+# Visual Studio
+.vs/
+
+# Python
+__pycache__/
+*.pyc
+
+# C++ build output
+build/
+out/
+x64/
+Debug/
+Release/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
