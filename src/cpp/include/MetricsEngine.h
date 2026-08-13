@@ -1,5 +1,7 @@
 #pragma once
 #include <vector>
+#ifndef METRICSENGINE_H
+#define METRICSENGINE_H
 
 class MetricsEngine{
 
@@ -11,3 +13,5 @@ class MetricsEngine{
     double getMaxDrawdown(const std::vector<double>& portfolioValues);
 
 };
+
+#endif
