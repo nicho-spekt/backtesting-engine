@@ -27,3 +27,33 @@ double MetricsEngine::getPeriodVolatility(const std::vector<double>& returns) {
     double variance = sum_squared_diffs / (returns.size() - 1);
     return std::sqrt(variance);
 }
+
+double MetricsEngine::getAnnualizedVolatility(const std::vector<double>& returns, int periodsPerYear) {
+    double period_volatility = getPeriodVolatility(returns);
+    if(!period_volatility) {
+        throw std::invalid_argument("Returns vector is empty.");
+    }
+    if(periodsPerYear <= 0) {
+        throw std::invalid_argument("Periods per year must be positive.");
+    }
+    return period_volatility * std::sqrt(periodsPerYear);
+}
+
+double MetricsEngine::getSharpeRatio(const std::vector<double>& returns, int periodsPerYear) {
+    double mean = std::accumulate(returns.begin(), returns.end(), 0.0) / returns.size();
+    double std_dev = getPeriodVolatility(returns);
+
+    if(std_dev == 0) {
+        throw std::invalid_argument("Standard deviation is zero.");
+    }
+
+
+    return mean / std_dev * std::sqrt(periodsPerYear);
+}
+
+double MetricsEngine::getMaxDrawdown(const std::vector<double>& portfolioValues) {
+    //df["Total_value"]/ df["Total_value"].cummax()- 1).min() * 100,
+    
+    return 0.0; 
+}
+
