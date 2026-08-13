@@ -52,8 +52,23 @@ double MetricsEngine::getSharpeRatio(const std::vector<double>& returns, int per
 }
 
 double MetricsEngine::getMaxDrawdown(const std::vector<double>& portfolioValues) {
-    //df["Total_value"]/ df["Total_value"].cummax()- 1).min() * 100,
-    
-    return 0.0; 
+    if(portfolioValues.empty()) {
+        throw std::invalid_argument("Portfolio values vector is empty.");
+    }
+
+    double max_drawdown = 0.0;
+    double peak = portfolioValues.front();
+
+    for(const auto& value : portfolioValues) {
+        if(value > peak) {
+            peak = value;
+        }
+        double drawdown = (peak - value) / peak;
+        if(drawdown > max_drawdown) {
+            max_drawdown = drawdown;
+        }
+    }
+
+    return max_drawdown * 100.0;
 }
 
