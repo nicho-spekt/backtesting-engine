@@ -9,4 +9,4 @@ class MetricsEngine{
     double getShapreRatio(const std::vector<double>& returns, int periodsPerYear);
     double getMaxDrawdown(const std::vector<double>& portfolioValues);
 
-}
+};
