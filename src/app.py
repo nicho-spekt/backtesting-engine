@@ -965,8 +965,15 @@ class BacktestingApp(QMainWindow):
                 QTableWidgetItem(str(name)),
             )
 
-            if isinstance(value, (float, int)):
+            if name in [
+                "Period_volatility",
+                "Annualized_volatility",
+            ]:
+                value_text = f"{value * 100:.4f}"
+                
+            elif isinstance(value, (float, int)):
                 value_text = f"{value:,.4f}"
+                
             else:
                 value_text = str(value)
 
@@ -1107,8 +1114,15 @@ class BacktestingApp(QMainWindow):
             for column_number, column in enumerate(df.columns):
                 value = row[column]
 
-                if isinstance(value, float):
+                if column in [
+                    "Period_volatility",
+                    "Annualized_volatility",
+                ]:
+                    text = f"{value * 100:.4f}"
+                    
+                elif isinstance(value, (float, int)):
                     text = f"{value:,.4f}"
+                    
                 else:
                     text = str(value)
 

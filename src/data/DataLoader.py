@@ -1,5 +1,4 @@
 import yfinance as yf
-import pathlib as pl
 import pandas as pd
 
 class DataLoader:

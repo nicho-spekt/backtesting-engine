@@ -40,6 +40,6 @@ class Backtester:
             df.at[row.Index, "Total_value"] = total_value
             df.at[row.Index, "Portfolio_return"] = (total_value / self.initial_capital - 1) * 100
 
-        df["Portfolio_return_period%"] = df["Total_value"].pct_change().fillna(0) * 100
+        df["Portfolio_return_period%"] = df["Total_value"].pct_change().fillna(0)
         
         return df
