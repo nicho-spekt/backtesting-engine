@@ -31,3 +31,16 @@ class BollingerBands(BaseStrategy):
         df.dropna(inplace=True)
             
         return df
+    
+    @classmethod
+    def validateParameters(cls, params):
+        
+        window = params["window"]
+        deviation = params["window_dev"]
+        
+        return(
+            isinstance(window, int)
+            and isinstance(deviation, int)
+            and window >= 2
+            and deviation > 0
+        )

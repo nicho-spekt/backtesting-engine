@@ -8,3 +8,7 @@ class BaseStrategy(ABC):
     @abstractmethod
     def generateSignals(self, df: pd.DataFrame) -> pd.DataFrame:
         pass
+    
+    @abstractmethod @classmethod
+    def validateParameters(cls, params) -> bool:
+        pass

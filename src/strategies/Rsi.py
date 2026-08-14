@@ -28,3 +28,20 @@ class Rsi(BaseStrategy):
         df.dropna(inplace=True)
         
         return df
+    
+    @classmethod
+    def validateParameters(cls, params):
+        
+        window = params["window"]
+        lower = params["lower_std_threshold"]
+        upper = params["upper_std_threshold"]
+        
+        return(
+            isinstance(window, int)
+            and isinstance(lower, int)
+            and isinstance(upper, int)
+            and window >= 2
+            and 0 <= lower <= 100
+            and 0 <= upper <= 100
+            and lower < upper
+        )

@@ -25,3 +25,19 @@ class MaCrossover(BaseStrategy):
         df.dropna(inplace=True)
         
         return df
+    
+    @classmethod
+    def validateParameters(cls, params):
+        
+        short = params["crossover_first"]
+        long = params["crossover_second"]
+        
+        return (
+            isinstance(short, int)
+            and isinstance (long, int)
+            and short > 0
+            and long > 0
+            and short < long
+        )
+    
+    

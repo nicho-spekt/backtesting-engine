@@ -27,3 +27,17 @@ class BreakoutMomentum(BaseStrategy):
         df.dropna(inplace=True)
         
         return df
+    
+    @classmethod
+    def validateParameters(cls, params):
+        
+        high = params["window_high"]
+        low = params["window_low"]
+        
+        return(
+            isinstance(high, int)
+            and isinstance(low, int)
+            and high >= 2
+            and low >= 2
+            and low < high
+        )
