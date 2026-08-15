@@ -7,6 +7,8 @@ from pathlib import Path
 import pandas as pd
 import metrics_cpp
 
+from optimization.ParameterOptimizer import ParameterOptimizer
+
 from PySide6.QtCore import QDate, Qt, QObject, QEvent
 from PySide6.QtWidgets import (
     QApplication,
@@ -1581,6 +1583,46 @@ class BacktestingApp(QMainWindow):
 
 
 if __name__ == "__main__":
+
+    # =====================================================
+    # TEMPORARY PARAMETER OPTIMIZER TEST
+    # =====================================================
+
+    loader = DataLoader(
+        "VGT",
+        "2020-01-01",
+        "2024-12-31"
+    )
+
+    marketDf = loader.loadData("1d")
+
+    backtester = Backtester(
+        100000,
+        commission=0.0,
+        slippage=0.0
+    )
+
+    optimizer = ParameterOptimizer()
+
+    bestScore, bestParams = optimizer.optimizeStrategy(
+        MaCrossover,
+        marketDf,
+        backtester,
+        "1d"
+    )
+
+    print("\n==============================")
+    print("MA CROSSOVER OPTIMIZATION")
+    print("==============================")
+    print("Best Sharpe:", bestScore)
+    print("Best parameters:", bestParams)
+    print("==============================\n")
+
+
+    # =====================================================
+    # NORMAL GUI
+    # =====================================================
+
     app = QApplication(sys.argv)
 
     window = BacktestingApp()

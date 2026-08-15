@@ -3,7 +3,7 @@ from dataclasses import dataclass
 
 @dataclass
 class ParameterSpec:
-    minimum: int
-    maximum: int
-    step: int
+    minimum: float
+    maximum: float
+    step: float
     parameter_type: type

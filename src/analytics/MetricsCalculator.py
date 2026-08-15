@@ -2,21 +2,21 @@ import pandas as pd
 import metrics_cpp
 
 class MetricsCalculator:
+    
+    PERIODS_PER_YEAR = {
+        "1d": 252,
+        "1wk": 52,
+        "1mo": 12,
+    }
 
     def calculateMetrics(self, df: pd.DataFrame, interval) -> pd.DataFrame:
 
-        periods_per_year = {
-            "1d": 252,
-            "1wk": 52,
-            "1mo": 12,
-        }
-
-        if interval not in periods_per_year:
+        if interval not in self.PERIODS_PER_YEAR:
             raise ValueError(
                 f"Unsupported interval: {interval}"
             )
 
-        annualization_factor = periods_per_year[interval]
+        annualization_factor = self.PERIODS_PER_YEAR[interval]
 
         returns = df["Portfolio_return_period"].astype(float).tolist()
         portfolio_values = (df["Total_value"]).astype(float).tolist()
