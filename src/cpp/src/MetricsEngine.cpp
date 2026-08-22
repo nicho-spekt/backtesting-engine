@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <stdexcept>
 #include <numeric>
+#include <limits>
 
 double MetricsEngine::getCumulativeReturn(const std::vector<double> &portfolioValues)
 {
@@ -69,10 +70,9 @@ double MetricsEngine::getSharpeRatio(
     double std_dev{
         getPeriodVolatility(returns)};
 
-    if (std_dev == 0.0)
+    if (std::abs(std_dev) < 1e-12)
     {
-        throw std::invalid_argument(
-            "Standard deviation is zero.");
+        return std::numeric_limits<double>::quiet_NaN(); //if no trades/return never changes
     }
 
     return (mean / std_dev) * std::sqrt(periodsPerYear);

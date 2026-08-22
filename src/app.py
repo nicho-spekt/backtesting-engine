@@ -8,6 +8,7 @@ import pandas as pd
 import metrics_cpp
 
 from optimization.ParameterOptimizer import ParameterOptimizer
+from optimization.OptimizationPipeline import OptimizationPipeline
 
 from PySide6.QtCore import QDate, Qt, QObject, QEvent
 from PySide6.QtWidgets import (
@@ -1602,22 +1603,14 @@ if __name__ == "__main__":
         slippage=0.0
     )
 
-    optimizer = ParameterOptimizer()
+    pipeline = OptimizationPipeline()
 
-    bestScore, bestParams = optimizer.optimizeStrategy(
-        MaCrossover,
+    pipeline.run(
+        Rsi,
         marketDf,
         backtester,
         "1d"
     )
-
-    print("\n==============================")
-    print("MA CROSSOVER OPTIMIZATION")
-    print("==============================")
-    print("Best Sharpe:", bestScore)
-    print("Best parameters:", bestParams)
-    print("==============================\n")
-
 
     # =====================================================
     # NORMAL GUI

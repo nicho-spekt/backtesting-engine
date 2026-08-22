@@ -63,7 +63,7 @@ STRATEGY_SEARCH_SPACES = {
 
         "1d": {
             "window": ParameterSpec(
-                minimum=5,
+                minimum=0,
                 maximum=30,
                 step=1,
                 parameter_type=int
@@ -77,8 +77,8 @@ STRATEGY_SEARCH_SPACES = {
             ),
 
             "upper_std_threshold": ParameterSpec(
-                minimum=60,
-                maximum=85,
+                minimum=40,
+                maximum=150,
                 step=5,
                 parameter_type=int
             ),

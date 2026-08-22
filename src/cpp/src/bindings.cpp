@@ -2,6 +2,7 @@
 #include <pybind11/stl.h>
 
 #include "MetricsEngine.h"
+#include "BacktesterEngine.h"
 
 namespace py = pybind11;
 
@@ -61,4 +62,35 @@ PYBIND11_MODULE(metrics_cpp, m)
         "max_drawdown",
         &MetricsEngine::getMaxDrawdown,
         py::arg("portfolio_values"));
+
+    py::class_<BacktesterEngine::BacktestResult>(
+        m,
+        "BacktestResult")
+        .def_readonly(
+            "shares",
+            &BacktesterEngine::BacktestResult::shares)
+        .def_readonly(
+            "cash",
+            &BacktesterEngine::BacktestResult::cash)
+        .def_readonly(
+            "position_values",
+            &BacktesterEngine::BacktestResult::positionValues)
+        .def_readonly(
+            "total_values",
+            &BacktesterEngine::BacktestResult::totalValues)
+        .def_readonly(
+            "portfolio_returns",
+            &BacktesterEngine::BacktestResult::portfolioReturns)
+        .def_readonly(
+            "portfolio_return_period",
+            &BacktesterEngine::BacktestResult::portfolioReturnPeriod);
+
+    m.def(
+        "runBacktest",
+        &BacktesterEngine::run,
+        py::arg("prices"),
+        py::arg("trades"),
+        py::arg("initial_capital"),
+        py::arg("commission"),
+        py::arg("slippage"));
 }

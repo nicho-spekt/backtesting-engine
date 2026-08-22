@@ -4,6 +4,8 @@ from .BaseStrategy import BaseStrategy
 
 class Rsi(BaseStrategy):
     
+    _rsiCache = {}
+    
     def __init__ (self, window, lower_std_threshold, upper_std_threshold):
         self.window = window
         self.lower_std_threshold = lower_std_threshold
@@ -14,7 +16,7 @@ class Rsi(BaseStrategy):
         df = df.copy()
         df = df.sort_index()
         
-        df['RSI'] = RSIIndicator(close=df['Close'], window=self.window).rsi()
+        df = self._calculateRsi(df)
         df['Signal'] = pd.NA
             
         df.loc[df["RSI"] < self.lower_std_threshold, "Signal"] = 1
@@ -29,6 +31,17 @@ class Rsi(BaseStrategy):
         
         return df
     
+    def _calculateRsi(self, df: pd.DataFrame) -> pd.DataFrame:
+        
+        cacheKey = (self.window, df.index[0], df.index[-1], len(df))
+        
+        if cacheKey not in Rsi._rsiCache:
+            Rsi._rsiCache[self.window] = RSIIndicator(close=df['Close'], window=self.window).rsi()
+            
+        df['RSI'] = Rsi._rsiCache[self.window]
+        
+        return df
+    
     @classmethod
     def validateParameters(cls, params):
         
@@ -38,8 +51,6 @@ class Rsi(BaseStrategy):
         
         return(
             isinstance(window, int)
-            and isinstance(lower, int)
-            and isinstance(upper, int)
             and window >= 2
             and 0 <= lower <= 100
             and 0 <= upper <= 100

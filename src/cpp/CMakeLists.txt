@@ -23,6 +23,7 @@ pybind11_add_module(
     metrics_cpp
     src/bindings.cpp
     src/MetricsEngine.cpp
+    src/BacktesterEngine.cpp
 )
 
 target_include_directories(
