@@ -13,11 +13,7 @@ class BollingerBands(BaseStrategy):
         df = df.copy()
         df = df.sort_index()
             
-        indicator_bb = TaBollingerBands(close=df["Close"], window=self.window, window_dev=self.window_dev)
-            
-        df["BB_Middle"] = indicator_bb.bollinger_mavg()
-        df["BB_Upper"] = indicator_bb.bollinger_hband()
-        df["BB_Lower"] = indicator_bb.bollinger_lband()
+        df = self._calculateBollingerBands(df)
         
         df["Signal"] = pd.NA
             
@@ -30,6 +26,27 @@ class BollingerBands(BaseStrategy):
             
         df.dropna(inplace=True)
             
+        return df
+    
+    def generateFeatures(self, df: pd.DataFrame) -> pd.DataFrame:
+        
+        df = self.generateSignals(df)
+        df["BB_signal"] = df["Signal"]         
+        
+        df["BB_percent_b"] = ((df["Close"] - df["BB_Lower"]) / (df["BB_Upper"] - df["BB_Lower"]))
+        df["BB_bandwith"] - ((df["BB_Upper"] - df["BB_Lower"]) / df["BB_Middle"])
+        df["BB_distance_middle"] = ((df["Close"] - df["BB_Middle"]) / df["BB_Middle"])
+        df["BB_bandwith_change"] = (df["BB_bandwith"].pct_change())
+        
+        return df[["BB_percent_b", "BB_bandwidth", "BB_distance_middle", "BB_bandwidth_change", "BB_signal"]]
+        
+    def _calculateBollingerBands(self, df: pd.DataFrame):
+        
+        indicator_bb = TaBollingerBands(close=df["Close"], window=self.window, window_dev=self.window_dev)
+        df["BB_Middle"] = indicator_bb.bollinger_mavg()
+        df["BB_Upper"] = indicator_bb.bollinger_hband()
+        df["BB_Lower"] = indicator_bb.bollinger_lband()
+        
         return df
     
     @classmethod

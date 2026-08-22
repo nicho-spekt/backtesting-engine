@@ -12,8 +12,7 @@ class MaCrossover(BaseStrategy):
         df = df.copy()
         df = df.sort_index()
         
-        df[f"Ma_{self.crossover_first}"] = df["Close"].rolling(self.crossover_first).mean()
-        df[f"Ma_{self.crossover_second}"] = df["Close"].rolling(self.crossover_second).mean()
+        df = self._calculateCrossovers(df)
         
         df["Signal"] = pd.NA
             
@@ -23,6 +22,28 @@ class MaCrossover(BaseStrategy):
             
         
         df.dropna(inplace=True)
+        
+        return df
+    
+    def generateFeatures(self, df: pd.DataFrame) -> pd.DataFrame:
+         
+        df = self.generateSignals(df)
+        df["Ma_signal"] = df["Signal"]
+        
+        short_col = f"Ma_{self.crossover_first}"
+        long_col = f"Ma_{self.crossover_second}"
+        df["Ma_spread_pct"] = ((df[short_col] - df[long_col]) / df["Close"])
+        df["Ma_short_slope"] = (df[short_col].pct_change())
+        df["Ma_long_slope"] = (df[long_col].pct_change())
+        df["Ma_price_to_short"] = (df["Close"] - df[short_col]) / df[short_col]
+        df["Ma_price_to_long"] = (df["Close"] - df[long_col]) / df[long_col]
+        
+        return df[["MA_spread_pct", "MA_short_slope", "MA_long_slope", "Price_to_short_MA", "Price_to_long_MA", "MA_signal"]]
+         
+    def _calculateCrossovers(self, df: pd.DataFrame) -> pd.DataFrame:
+        
+        df[f"Ma_{self.crossover_first}"] = df["Close"].rolling(self.crossover_first).mean()
+        df[f"Ma_{self.crossover_second}"] = df["Close"].rolling(self.crossover_second).mean()
         
         return df
     

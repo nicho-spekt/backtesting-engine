@@ -9,6 +9,10 @@ class BaseStrategy(ABC):
     def generateSignals(self, df: pd.DataFrame) -> pd.DataFrame:
         pass
     
+    @abstractmethod
+    def generateFeatures(self, df: pd.DataFrame) -> pd.DataFrame:
+        pass
+    
     @classmethod
     def validateParameters(cls, params) -> bool:
         pass

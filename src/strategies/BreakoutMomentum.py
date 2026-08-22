@@ -12,8 +12,7 @@ class BreakoutMomentum(BaseStrategy):
         df = df.copy()
         df = df.sort_index()
     
-        df["Breakout_High"] = df["Close"].rolling(self.window_high).max().shift(1)
-        df["Exit_Low"] = df["Close"].rolling(self.window_low).min().shift(1)
+        df = self._calculatePriceActionLines(df)
     
         df["Signal"] = pd.NA
     
@@ -25,6 +24,26 @@ class BreakoutMomentum(BaseStrategy):
         df["Trade"] = (df["Signal"] - previous_signal).astype(int)
     
         df.dropna(inplace=True)
+        
+        return df
+    
+    def generateFeatures(self, df: pd.DataFrame) -> pd.DataFrame:
+        
+        df = self.generateSignals(df)
+        df["Breakout_signal"] = df["Signal"]
+        
+        df["Breakout_distance_high"] = (df["Close"] / df["Breakout_High"] - 1.0)
+        df["Breakout_distance_low"] = (df["Close"] / df["Exit_Low"] - 1.0)
+        df["Breakout_channel_width"] = (df["Breakout_High"] - df["Exit_Low"]) / df["Close"]
+        df["Breakout_strength"] = (df["Close"] - df["Breakout_High"]) / df["Breakout_High"]
+        
+        return df[["Breakout_distance_high", "Breakout_distance_low", "Breakout_channel_width", "Breakout_signal"]]
+        
+    
+    def _calculatePriceActionLines(self, df: pd.DataFrame) -> pd.DataFrame:
+        
+        df["Breakout_High"] = df["Close"].rolling(self.window_high).max().shift(1)
+        df["Exit_Low"] = df["Close"].rolling(self.window_low).min().shift(1)
         
         return df
     
