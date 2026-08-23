@@ -38,7 +38,7 @@ class MaCrossover(BaseStrategy):
         df["Ma_price_to_short"] = (df["Close"] - df[short_col]) / df[short_col]
         df["Ma_price_to_long"] = (df["Close"] - df[long_col]) / df[long_col]
         
-        return df[["MA_spread_pct", "MA_short_slope", "MA_long_slope", "Price_to_short_MA", "Price_to_long_MA", "MA_signal"]]
+        return df[["Ma_spread_pct", "Ma_short_slope", "Ma_long_slope", "Ma_price_to_short", "Ma_price_to_long", "Ma_signal"]]
          
     def _calculateCrossovers(self, df: pd.DataFrame) -> pd.DataFrame:
         

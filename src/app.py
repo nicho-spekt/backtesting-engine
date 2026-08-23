@@ -9,6 +9,7 @@ import metrics_cpp
 
 from optimization.ParameterOptimizer import ParameterOptimizer
 from optimization.OptimizationPipeline import OptimizationPipeline
+from ml.FeatureEngine import FeatureEngine
 
 from PySide6.QtCore import QDate, Qt, QObject, QEvent
 from PySide6.QtWidgets import (
@@ -1585,10 +1586,6 @@ class BacktestingApp(QMainWindow):
 
 if __name__ == "__main__":
 
-    # =====================================================
-    # TEMPORARY PARAMETER OPTIMIZER TEST
-    # =====================================================
-
     loader = DataLoader(
         "VGT",
         "2020-01-01",
@@ -1603,22 +1600,54 @@ if __name__ == "__main__":
         slippage=0.0
     )
 
-    pipeline = OptimizationPipeline()
+    optimizer = ParameterOptimizer()
 
-    pipeline.run(
+    strategies = [
+        MaCrossover,
         Rsi,
+        BollingerBands,
+        BreakoutMomentum
+    ]
+
+    optimizedParams = {}
+
+    for strategyClass in strategies:
+
+        bestScore, bestParams = optimizer.optimizeStrategy(
+            strategyClass,
+            marketDf,
+            backtester,
+            "1d"
+        )
+
+        optimizedParams[strategyClass] = bestParams
+
+        print(
+            strategyClass.__name__,
+            bestScore,
+            bestParams
+        )
+
+    featureEngine = FeatureEngine()
+
+    featureDf = featureEngine.run(
         marketDf,
-        backtester,
-        "1d"
+        optimizedParams
     )
 
-    # =====================================================
-    # NORMAL GUI
-    # =====================================================
+    print("\n==============================")
+    print("FEATURE DATAFRAME")
+    print("==============================")
 
-    app = QApplication(sys.argv)
+    print(featureDf.columns.tolist())
 
-    window = BacktestingApp()
-    window.show()
+    print("\nShape:")
+    print(featureDf.shape)
 
-    sys.exit(app.exec())
+    print("\nFirst rows:")
+    print(featureDf.head())
+
+    print("\nTarget distribution:")
+    print(featureDf["Target"].value_counts())
+
+    print("==============================\n")

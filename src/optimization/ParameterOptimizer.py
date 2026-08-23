@@ -7,7 +7,7 @@ import time
 
 class ParameterOptimizer:
     
-    def optimizeStrategy(self, strategyClass, df, backtester, interval):
+    def optimizeStrategy(self, strategyClass, df, backtester, interval = 1):
         
         paramCombinations = self.generateCombinations(strategyClass, interval)
         bestScore = float("-inf")

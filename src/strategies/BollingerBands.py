@@ -34,9 +34,9 @@ class BollingerBands(BaseStrategy):
         df["BB_signal"] = df["Signal"]         
         
         df["BB_percent_b"] = ((df["Close"] - df["BB_Lower"]) / (df["BB_Upper"] - df["BB_Lower"]))
-        df["BB_bandwith"] - ((df["BB_Upper"] - df["BB_Lower"]) / df["BB_Middle"])
+        df["BB_bandwidth"] = ((df["BB_Upper"] - df["BB_Lower"]) / df["BB_Middle"])
         df["BB_distance_middle"] = ((df["Close"] - df["BB_Middle"]) / df["BB_Middle"])
-        df["BB_bandwith_change"] = (df["BB_bandwith"].pct_change())
+        df["BB_bandwidth_change"] = (df["BB_bandwidth"].pct_change())
         
         return df[["BB_percent_b", "BB_bandwidth", "BB_distance_middle", "BB_bandwidth_change", "BB_signal"]]
         
