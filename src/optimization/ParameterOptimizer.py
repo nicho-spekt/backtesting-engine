@@ -4,8 +4,20 @@ import metrics_cpp
 from analytics.MetricsCalculator import MetricsCalculator
 import math
 import time
+import pandas as pd
 
 class ParameterOptimizer:
+    
+    def optimizeAllStrategies(self, df: pd.DataFrame, backtester, interval = 1):
+        
+        optimizedParams = {}
+        
+        for strategyClass in STRATEGY_SEARCH_SPACES.keys():
+            bestScore, bestParams = self.optimizeStrategy(strategyClass, df, backtester, interval)
+                    
+            optimizedParams[strategyClass] = bestParams
+        
+        return optimizedParams
     
     def optimizeStrategy(self, strategyClass, df, backtester, interval = 1):
         

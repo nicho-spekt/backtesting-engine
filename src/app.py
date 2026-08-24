@@ -51,6 +51,8 @@ from strategies.Rsi import Rsi
 from strategies.BollingerBands import BollingerBands
 from strategies.BreakoutMomentum import BreakoutMomentum
 
+from ml.MLPipeline import MLPipeline
+
 
 class DisabledTabClickFilter(QObject):
     """Shows a message when the disabled Portfolio tab is clicked."""
@@ -1586,6 +1588,7 @@ class BacktestingApp(QMainWindow):
 
 if __name__ == "__main__":
 
+
     loader = DataLoader(
         "VGT",
         "2020-01-01",
@@ -1595,59 +1598,15 @@ if __name__ == "__main__":
     marketDf = loader.loadData("1d")
 
     backtester = Backtester(
-        100000,
+        inital_capital=100000,
         commission=0.0,
         slippage=0.0
     )
 
-    optimizer = ParameterOptimizer()
+    mlPipeline = MLPipeline()
 
-    strategies = [
-        MaCrossover,
-        Rsi,
-        BollingerBands,
-        BreakoutMomentum
-    ]
-
-    optimizedParams = {}
-
-    for strategyClass in strategies:
-
-        bestScore, bestParams = optimizer.optimizeStrategy(
-            strategyClass,
-            marketDf,
-            backtester,
-            "1d"
-        )
-
-        optimizedParams[strategyClass] = bestParams
-
-        print(
-            strategyClass.__name__,
-            bestScore,
-            bestParams
-        )
-
-    featureEngine = FeatureEngine()
-
-    featureDf = featureEngine.run(
+    modelTrainer, optimizedParams = mlPipeline.run(
         marketDf,
-        optimizedParams
+        backtester,
+        "1d"
     )
-
-    print("\n==============================")
-    print("FEATURE DATAFRAME")
-    print("==============================")
-
-    print(featureDf.columns.tolist())
-
-    print("\nShape:")
-    print(featureDf.shape)
-
-    print("\nFirst rows:")
-    print(featureDf.head())
-
-    print("\nTarget distribution:")
-    print(featureDf["Target"].value_counts())
-
-    print("==============================\n")
