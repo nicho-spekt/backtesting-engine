@@ -1588,11 +1588,10 @@ class BacktestingApp(QMainWindow):
 
 if __name__ == "__main__":
 
-
     loader = DataLoader(
         "VGT",
-        "2020-01-01",
-        "2024-12-31"
+        "2005-01-01",
+        "2026-08-23"
     )
 
     marketDf = loader.loadData("1d")
@@ -1608,5 +1607,6 @@ if __name__ == "__main__":
     modelTrainer, optimizedParams = mlPipeline.run(
         marketDf,
         backtester,
-        "1d"
+        "1d",
+        predictionHorizon=5
     )

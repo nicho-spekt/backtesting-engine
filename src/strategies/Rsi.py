@@ -37,12 +37,12 @@ class Rsi(BaseStrategy):
         df["RSI_signal"] = df["Signal"]
         
         df["RSI_value"] = df["RSI"]
-        df["RSI_centered"] = ((df["RSI"] - 50.0) / 50.0)
+        #df["RSI_centered"] = ((df["RSI"] - 50.0) / 50.0)
         df["RSI_change"] = (df["RSI"].diff())
-        df["RSI_distance_lower"] = (df["RSI"] - self.lower_std_threshold) / self.lower_std_threshold
-        df["RSI_distance_upper"] = (self.upper_std_threshold - df["RSI"]) / self.upper_std_threshold
+        #df["RSI_distance_lower"] = (df["RSI"] - self.lower_std_threshold) / self.lower_std_threshold
+        #df["RSI_distance_upper"] = (self.upper_std_threshold - df["RSI"]) / self.upper_std_threshold
         
-        return df[["RSI_value", "RSI_centered", "RSI_change", "RSI_distance_lower", "RSI_distance_upper", "RSI_signal"]]
+        return df[["RSI_value", "RSI_change", "RSI_signal"]]
     
     def _calculateRsi(self, df: pd.DataFrame) -> pd.DataFrame:
         

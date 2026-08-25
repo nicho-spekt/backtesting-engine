@@ -35,9 +35,9 @@ class BreakoutMomentum(BaseStrategy):
         df["Breakout_distance_high"] = (df["Close"] / df["Breakout_High"] - 1.0)
         df["Breakout_distance_low"] = (df["Close"] / df["Exit_Low"] - 1.0)
         df["Breakout_channel_width"] = (df["Breakout_High"] - df["Exit_Low"]) / df["Close"]
-        df["Breakout_strength"] = (df["Close"] - df["Breakout_High"]) / df["Breakout_High"]
+        #df["Breakout_strength"] = (df["Close"] - df["Breakout_High"]) / df["Breakout_High"]
         
-        return df[["Breakout_distance_high", "Breakout_distance_low", "Breakout_channel_width", "Breakout_strength", "Breakout_signal"]]
+        return df[["Breakout_distance_high", "Breakout_distance_low", "Breakout_channel_width", "Breakout_signal"]]
         
     
     def _calculatePriceActionLines(self, df: pd.DataFrame) -> pd.DataFrame:
