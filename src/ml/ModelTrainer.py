@@ -16,7 +16,8 @@ class ModelTrainer:
             self.scaler = StandardScaler()
 
             self.model = LogisticRegression(
-                max_iter=1000
+                max_iter=1000,
+                C=0.1
             )
 
         elif modelType == "random_forest":

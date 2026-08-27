@@ -2,9 +2,81 @@ import pandas as pd
 from optimization import ParameterOptimizer
 import numpy as np
 from strategies.Atr import Atr
+from data.DataLoader import DataLoader
 
 
 class FeatureEngine:
+
+    BASE_FEATURES = [
+        "Return_1",
+        "Return_5",
+        "Return_20",
+        "Volatility_20",
+        "Volume_change",
+        "Volume_vs_avg20",
+        "Intraday_range",
+        "Gap",
+        "Ma_spread_pct",
+        "Ma_short_slope",
+        "Ma_long_slope",
+        "Ma_price_to_short",
+        "Ma_price_to_long",
+        "Ma_signal",
+        "RSI_value",
+        "RSI_change",
+        "RSI_signal",
+        "BB_percent_b",
+        "BB_bandwidth",
+        "BB_distance_middle",
+        "BB_bandwidth_change",
+        "BB_signal",
+        "Breakout_distance_high",
+        "Breakout_distance_low",
+        "Breakout_channel_width",
+        "Breakout_signal",
+    ]
+
+    MACD_FEATURES = [
+        "MACD_pct",
+        "MACD_signal_pct",
+        "MACD_histogram_pct",
+        "MACD_signal",
+    ]
+
+    ATR_FEATURES = [
+        "ATR_pct",
+        "ATR_change",
+        "ATR_ratio",
+    ]
+
+    MOMENTUM_FEATURES = [
+        "Return_2",
+        "Return_3",
+        "Return_10",
+        "Return_60",
+        "Momentum_5_20",
+        "Momentum_20_60",
+    ]
+
+    VOLATILITY_FEATURES = [
+        "Volatility_5",
+        "Volatility_10",
+        "Volatility_60",
+        "Volatility_ratio_5_20",
+        "Volatility_ratio_20_60",
+    ]
+
+    RANGE_FEATURES = [
+        "Range_position_20",
+        "Range_position_60",
+        "Stochastic_K",
+        "Stochastic_D",
+    ]
+
+    VOLUME_FEATURES = [
+        "Volume_z20",
+        "Dollar_volume_z20",
+    ]
 
     FEATURE_COLUMNS = [
         "Return_1",
@@ -70,18 +142,56 @@ class FeatureEngine:
         "Volume_vs_avg20",
     ]
 
+    MARKET_CONTEXT_FEATURES = [
+        "SPY_Return_1",
+        "SPY_Return_5",
+        "SPY_Return_20",
+        "QQQ_Return_1",
+        "QQQ_Return_5",
+        "QQQ_Return_20",
+        "VGT_vs_SPY_5",
+        "VGT_vs_SPY_20",
+        "VGT_vs_QQQ_5",
+        "VGT_vs_QQQ_20",
+        "VIX_level",
+        "VIX_change_1",
+        "VIX_change_5",
+        "VIX_z20",
+    ]
+
+    VIX_FEATURES = [
+        "VIX_level",
+        "VIX_change_1",
+        "VIX_change_5",
+        "VIX_z20",
+    ]
+
+    RELATIVE_MARKET_FEATURES = [
+        "SPY_Return_1",
+        "SPY_Return_5",
+        "SPY_Return_20",
+        "QQQ_Return_1",
+        "QQQ_Return_5",
+        "QQQ_Return_20",
+    ]
+
     @classmethod
     def getFeatureColumns(cls):
 
-        columns = cls.FEATURE_COLUMNS.copy()
+        columns = cls.BASE_FEATURES.copy()
+        #columns.extend(cls.RELATIVE_MARKET_FEATURES.copy())
+        columns.extend(cls.VIX_FEATURES.copy())
+        columns.extend(cls.ATR_FEATURES.copy())
 
-        for column in cls.LAG_COLUMNS:
-            for lag in [1, 2, 3, 5]:
-                columns.append(f"{column}_lag_{lag}")
+        """for column in cls.LAG_COLUMNS:
+            #for lag in [1, 2, 3, 5]:
+            columns.append(f"{column}_lag_5")"""
 
         return columns
 
-    def run(self, df: pd.DataFrame, optimizedParams, interval="1d", predictionHorizon=1):
+    def run(
+        self, df: pd.DataFrame, optimizedParams, interval="1d", predictionHorizon=1
+    ):
 
         dfFeatures = df.copy().sort_index()
 
@@ -185,14 +295,52 @@ class FeatureEngine:
             dfFeatures["Volume"] - dfFeatures["Volume"].rolling(20).mean()
         ) / dfFeatures["Volume"].rolling(20).std()
 
+        tickers = ["SPY", "QQQ"]
+
+        for ticker in tickers:
+            loader = DataLoader(ticker, dfFeatures.index[0], dfFeatures.index[-1])
+            dfContext = loader.loadData("1d")
+            dfFeatures[f"{ticker}_close"] = dfContext["Close"]
+            for day in [1, 5, 20]:
+                dfFeatures[f"{ticker}_Return_{day}"] = dfContext["Close"].pct_change(
+                    day
+                )
+
+        dfFeatures[f"VGT_vs_SPY_5"] = (
+            dfFeatures["Return_5"] - dfFeatures["SPY_Return_5"]
+        )
+        dfFeatures[f"VGT_vs_SPY_20"] = (
+            dfFeatures["Return_20"] - dfFeatures["SPY_Return_20"]
+        )
+
+        dfFeatures[f"VGT_vs_QQQ_5"] = (
+            dfFeatures["Return_5"] - dfFeatures["QQQ_Return_5"]
+        )
+        dfFeatures[f"VGT_vs_QQQ_20"] = (
+            dfFeatures["Return_20"] - dfFeatures["QQQ_Return_20"]
+        )
+
+        loader = DataLoader("^VIX", dfFeatures.index[0], dfFeatures.index[-1])
+        dfVixContext = loader.loadData("1d")
+
+        vixClose = dfVixContext["Close"]
+        dfFeatures["VIX_level"] = vixClose
+        dfFeatures["VIX_change_1"] = vixClose.pct_change(1)
+        dfFeatures["VIX_change_5"] = vixClose.pct_change(5)
+        dfFeatures["VIX_z20"] = (
+            vixClose - vixClose.rolling(20).mean()
+        ) / vixClose.rolling(20).std()
+
         target = (nextClose > df["Close"]).astype("Int64")
 
         target[nextClose.isna()] = pd.NA
 
         dfFeatures["Target"] = target
 
+        featureColumns = self.getFeatureColumns()
+
         dfFeatures.replace([np.inf, -np.inf], np.nan, inplace=True)
 
-        dfFeatures.dropna(inplace=True)
+        dfFeatures.dropna(subset=featureColumns + ["Target"], inplace=True)
 
         return dfFeatures
