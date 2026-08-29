@@ -10,6 +10,7 @@ import metrics_cpp
 from optimization.ParameterOptimizer import ParameterOptimizer
 from optimization.OptimizationPipeline import OptimizationPipeline
 from ml.FeatureEngine import FeatureEngine
+from ml.WalkForwardValidator import WalkForwardValidator
 
 from PySide6.QtCore import QDate, Qt, QObject, QEvent
 from PySide6.QtWidgets import (
@@ -1499,8 +1500,12 @@ if __name__ == "__main__":
 
     backtester = Backtester(inital_capital=100000, commission=0.0, slippage=0.0)
 
-    mlPipeline = MLPipeline()
+    """mlPipeline = MLPipeline()
+    
+    dfTrain, dfValidation, dfTest = mlPipeline.splitData(marketDf, [0.6, 0.2, 0.2])
 
-    modelTrainer, optimizedParams = mlPipeline.run(
-        marketDf, backtester, "1d", predictionHorizon=5
-    )
+    modelTrainer, optimizedParams = mlPipeline.run(dfTrain, dfValidation, backtester, "1d", predictionHorizon=5)"""
+    
+    validator = WalkForwardValidator()
+    
+    validator.run(marketDf)

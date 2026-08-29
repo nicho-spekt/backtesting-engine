@@ -179,7 +179,7 @@ class FeatureEngine:
     def getFeatureColumns(cls):
 
         columns = cls.BASE_FEATURES.copy()
-        #columns.extend(cls.RELATIVE_MARKET_FEATURES.copy())
+        # columns.extend(cls.RELATIVE_MARKET_FEATURES.copy())
         columns.extend(cls.VIX_FEATURES.copy())
         columns.extend(cls.ATR_FEATURES.copy())
 
@@ -190,7 +190,7 @@ class FeatureEngine:
         return columns
 
     def run(
-        self, df: pd.DataFrame, optimizedParams, interval="1d", predictionHorizon=1
+        self, df: pd.DataFrame, optimizedParams, interval="1d", predictionHorizon=1, targetThreshold = 0.0
     ):
 
         dfFeatures = df.copy().sort_index()
@@ -231,8 +231,6 @@ class FeatureEngine:
         for column in self.LAG_COLUMNS:
             for lag in [1, 2, 3, 5]:
                 dfFeatures[f"{column}_lag_{lag}"] = dfFeatures[column].shift(lag)
-
-        nextClose = df["Close"].shift(-predictionHorizon)
 
         for window in [2, 3, 5, 10, 20, 60]:
             dfFeatures[f"Return_{window}"] = dfFeatures["Close"].pct_change(window)
@@ -331,9 +329,13 @@ class FeatureEngine:
             vixClose - vixClose.rolling(20).mean()
         ) / vixClose.rolling(20).std()
 
-        target = (nextClose > df["Close"]).astype("Int64")
+        #nextClose = df["Close"].shift(-predictionHorizon)
 
-        target[nextClose.isna()] = pd.NA
+        futureReturn = df["Close"].shift(-predictionHorizon) / df["Close"] - 1
+
+        target = (futureReturn > targetThreshold).astype("Int64")
+
+        target[futureReturn.isna()] = pd.NA
 
         dfFeatures["Target"] = target
 

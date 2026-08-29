@@ -15,17 +15,27 @@ from sklearn.metrics import (
 
 class MLPipeline:
 
-    def run(self, df: pd.DataFrame, backtester, interval="1d", predictionHorizon=1):
+    # def run(self, df: pd.DataFrame, backtester, listPercentages: list[float], interval="1d", predictionHorizon=1):
+    def run(
+        self,
+        dfTrain: pd.DataFrame,
+        dfValidation: pd.DataFrame,
+        backtester,
+        interval="1d",
+        predictionHorizon=1,
+    ):
 
-        dfTrain, dfValidation, dfTest = self.splitData(df)
+        # dfTrain, dfValidation, dfTest = self.splitData(df, listPercentages)
 
         optimizer = ParameterOptimizer()
         optimizedParams = optimizer.optimizeAllStrategies(dfTrain, backtester, interval)
 
         featureEngine = FeatureEngine()
 
+        df = pd.concat([dfTrain, dfValidation])
+
         dfAllFeatures = featureEngine.run(
-            df, optimizedParams, interval, predictionHorizon
+            df, optimizedParams, interval, predictionHorizon, 0.025
         )
 
         trainEndIndex = dfTrain.index[-1]
@@ -50,29 +60,36 @@ class MLPipeline:
         dfXValidation = dfValidationFeatures[featureColumns]
         dfYValidation = dfValidationFeatures["Target"].astype(int)
 
+        print(
+            f"\n==========Rates==========\n"
+            f"Training positive rate: {dfYTrain.mean()}\n"
+            f"Validation postive rate: {dfYValidation.mean()}\n"
+            f"\n==========Rates==========\n"
+        )
+
         featureShift = (
             ((dfXValidation.mean() - dfXTrain.mean()) / dfXTrain.std())
             .abs()
             .sort_values(ascending=False)
         )
 
-        print("\n==============================")
+        """print("\n==============================")
         print("LARGEST TRAIN-VALIDATION FEATURE SHIFTS")
         print("==============================")
         print(featureShift.head(15))
-        print("==============================\n")
+        print("==============================\n")"""
 
         modelTrainer = ModelTrainer(modelType="logistic")
 
         modelTrainer.train(dfXTrain, dfYTrain)
 
-        coefficients = modelTrainer.getCoefficients(dfXTrain.columns)
+        # coefficients = modelTrainer.getCoefficients(dfXTrain.columns)
 
-        print("\n==============================")
+        """print("\n==============================")
         print("MODEL COEFFICIENTS")
         print("==============================")
         print(coefficients)
-        print("==============================\n")
+        print("==============================\n")"""
 
         predictions = modelTrainer.predict(dfXValidation)
         probabilities = modelTrainer.predictProbabilities(dfXValidation)
@@ -81,7 +98,7 @@ class MLPipeline:
 
         trainProbabilities = modelTrainer.predictProbabilities(dfXTrain)
 
-        print("\n==============================")
+        """print("\n==============================")
         print("ML TRAINING RESULTS")
         print("==============================")
 
@@ -89,9 +106,11 @@ class MLPipeline:
 
         print("Precision:", precision_score(dfYTrain, trainPredictions))
 
-        print("Recall:", recall_score(dfYTrain, trainPredictions))
+        print("Recall:", recall_score(dfYTrain, trainPredictions))"""
 
-        print("ROC AUC:", roc_auc_score(dfYTrain, trainProbabilities))
+        trainingAuc = roc_auc_score(dfYTrain, trainProbabilities)
+
+        """print("ROC AUC:", trainingAuc)
 
         print("Balanced accuracy:", balanced_accuracy_score(dfYTrain, trainPredictions))
 
@@ -99,7 +118,7 @@ class MLPipeline:
 
         print("Predicted positive rate:", trainPredictions.mean())
 
-        print("==============================")
+        print("==============================")"""
 
         accuracy = accuracy_score(dfYValidation, predictions)
 
@@ -107,18 +126,18 @@ class MLPipeline:
 
         recall = recall_score(dfYValidation, predictions)
 
-        auc = roc_auc_score(dfYValidation, probabilities)
+        validationAuc = roc_auc_score(dfYValidation, probabilities)
 
         matrix = confusion_matrix(dfYValidation, predictions)
 
-        print("\n==============================")
+        """ print("\n==============================")
         print("ML VALIDATION RESULTS")
         print("==============================")
 
         print("Accuracy:", accuracy)
         print("Precision:", precision)
         print("Recall:", recall)
-        print("ROC AUC:", auc)
+        print("ROC AUC:", validationAuc)
 
         print("\nConfusion Matrix:")
         print(matrix)
@@ -142,17 +161,34 @@ class MLPipeline:
         # print("\nModel coefficients:")
         # print(coefficients)
 
-        print("==============================\n")
+        print("==============================\n")"""
 
-        return modelTrainer, optimizedParams
+        return trainingAuc, validationAuc
 
-    def splitData(self, df: pd.DataFrame) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+    def splitData(self, df: pd.DataFrame, percentages: list[float]):
 
-        trainSplit = int(len(df) * 0.6)
-        validationSplit = int(len(df) * 0.8)
+        assert len(percentages) > 0
+        assert all(isinstance(p, (int, float)) for p in percentages)
+        assert all(p > 0 for p in percentages)
+        assert all(p <= 1 for p in percentages)
+        assert abs(sum(percentages) - 1.0) < 1e-9
 
-        dfTrain = df.iloc[:trainSplit]
-        dfValidation = df.iloc[trainSplit:validationSplit]
-        dfTest = df.iloc[validationSplit:]
+        previousPercentage, previousSplit, currentPercentage, currentSplit = (
+            0.0,
+            0,
+            0.0,
+            0,
+        )
 
-        return dfTrain, dfValidation, dfTest
+        for index, percentage in enumerate(percentages):
+
+            if index == len(percentages) - 1:
+                dfSplit = df.iloc[previousSplit:]
+            else:
+                currentPercentage = previousPercentage + percentage
+                currentSplit = int(len(df) * currentPercentage)
+                dfSplit = df.iloc[previousSplit:currentSplit]
+                previousPercentage = currentPercentage
+                previousSplit = currentSplit
+
+            yield dfSplit
