@@ -9,29 +9,37 @@ class WalkForwardValidator:
     def run(self, df: pd.DataFrame):
 
         pipeline = MLPipeline()
-        splitPercentages = [0.4, 0.1, 0.1, 0.1, 0.1, 0.2]
+        splitPercentages = [0.2, 0.2, 0.2, 0.2, 0.2]
 
-        dfFirst, dfSecond, dfThird, dfFourth, dfFifth, dfSixth = pipeline.splitData(
+        dfFirst, dfSecond, dfThird, dfFourth, dfFifth = pipeline.splitData(
             df, splitPercentages
         )
 
-        dfList = [dfFirst, dfSecond, dfThird, dfFourth, dfFifth, dfSixth]
+        dfList = list(pipeline.splitData(df, splitPercentages))
 
         backtester = Backtester(inital_capital=100000, commission=0.0, slippage=0.0)
 
         dfCurrent = dfList[0]
 
         aucList = []
+        
+        resultList = []
 
         for validationIndex in range(1, len(dfList)):
+            
+            dfValidation = dfList[validationIndex]
+            
+            trainStart = dfCurrent.index[0]
+            trainEnd = dfCurrent.index[-1]
 
-            trainingAuc, validationAuc = pipeline.run(
+            dfFoldResults, trainingAuc, validationAuc = pipeline.run(
                 dfCurrent,
                 dfList[validationIndex],
                 backtester,
                 "1d",
                 predictionHorizon=5,
             )
+            resultList.append(dfFoldResults)
             aucList.append(validationAuc)
 
             print(
@@ -43,7 +51,11 @@ class WalkForwardValidator:
                 f"{dfList[validationIndex].index[-1]}"
             )
 
-            dfCurrent = pd.concat([dfCurrent, dfList[validationIndex]])
+            dfCurrent = pd.concat([dfCurrent, dfValidation])
 
         print(f"AUC mean: {statistics.mean(aucList)}")
         print(f"AUC std: {statistics.stdev(aucList)}")
+        
+        dfResults = pd.concat(resultList).sort_index()
+
+        return dfResults

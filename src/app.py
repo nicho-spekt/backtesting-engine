@@ -51,6 +51,7 @@ from strategies.MaCrossover import MaCrossover
 from strategies.Rsi import Rsi
 from strategies.BollingerBands import BollingerBands
 from strategies.BreakoutMomentum import BreakoutMomentum
+from strategies.MLStrategy import MLStrategy
 
 from ml.MLPipeline import MLPipeline
 
@@ -1500,12 +1501,55 @@ if __name__ == "__main__":
 
     backtester = Backtester(inital_capital=100000, commission=0.0, slippage=0.0)
 
-    """mlPipeline = MLPipeline()
+    pipeline = MLPipeline()
     
-    dfTrain, dfValidation, dfTest = mlPipeline.splitData(marketDf, [0.6, 0.2, 0.2])
+    #dfFirst, dfSecond, dfThird, dfFourth, dfFifth = pipeline.splitData(marketDf, [0.6, 0.2, 0.2])
 
-    modelTrainer, optimizedParams = mlPipeline.run(dfTrain, dfValidation, backtester, "1d", predictionHorizon=5)"""
+    #modelTrainer, optimizedParams = pipeline.run(dfTrain, dfValidation, backtester, "1d", predictionHorizon=5)
     
     validator = WalkForwardValidator()
     
-    validator.run(marketDf)
+    dfResults = validator.run(marketDf)
+
+    """dfTrain, dfValidation = pipeline.splitData(marketDf, [0.8, 0.2])
+
+    dfResults = pipeline.run(
+        dfTrain, dfValidation, backtester, interval="1d", predictionHorizon=5
+    )"""
+
+    #strategy = MLStrategy(0.4)
+
+    #dfSignals = strategy.generateSignals(dfResults)
+    #dfResults = backtester.run(dfSignals)
+
+    thresholds = [
+        0.10,
+        0.15,
+        0.20,
+        0.25,
+        0.30
+    ]
+    
+    for threshold in thresholds:
+        
+        strategy = MLStrategy(threshold)
+        dfSignals = strategy.generateSignals(dfResults)
+
+        dfPortfolio = backtester.run(dfSignals)
+
+        metrics = MetricsCalculator()
+        dfMetrics = metrics.calculateMetrics(dfPortfolio, "1d")
+
+        result = dfMetrics.iloc[0]
+
+        print("\n==============================")
+        print(f"PROBABILITY THRESHOLD: {threshold:.2f}")
+        print("==============================")
+        print(f"Ending value:      ${result['Ending_value']:,.2f}")
+        print(f"Cumulative return: {result['Cumulative_return'] * 100:.2f}%")
+        print(f"Sharpe ratio:      {result['Sharpe_ratio']:.3f}")
+        print(f"Max drawdown:      {result['Max_drawdown'] * 100:.2f}%")
+        print(f"Number of trades:  {int(result['Number_of_trades'])}")
+        print(f"Time invested:     {result['Time_invested'] * 100:.2f}%")
+        print("==============================\n")
+        

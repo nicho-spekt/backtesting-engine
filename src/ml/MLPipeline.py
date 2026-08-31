@@ -10,6 +10,7 @@ from sklearn.metrics import (
     confusion_matrix,
     roc_auc_score,
     balanced_accuracy_score,
+    average_precision_score
 )
 
 
@@ -35,7 +36,7 @@ class MLPipeline:
         df = pd.concat([dfTrain, dfValidation])
 
         dfAllFeatures = featureEngine.run(
-            df, optimizedParams, interval, predictionHorizon, 0.025
+            df, optimizedParams, interval, predictionHorizon, targetThreshold=0.025
         )
 
         trainEndIndex = dfTrain.index[-1]
@@ -50,7 +51,6 @@ class MLPipeline:
         dfTestFeatures = dfAllFeatures.loc[dfAllFeatures.index > validationEndIndex]
 
         dfTrainFeatures = dfTrainFeatures.iloc[:-predictionHorizon]
-        dfValidationFeatures = dfValidationFeatures.iloc[:-predictionHorizon]
 
         featureColumns = FeatureEngine.getFeatureColumns()
 
@@ -127,6 +127,15 @@ class MLPipeline:
         recall = recall_score(dfYValidation, predictions)
 
         validationAuc = roc_auc_score(dfYValidation, probabilities)
+        
+        averagePrecision = average_precision_score(dfYValidation, probabilities)
+        
+        print("Average Precision:", averagePrecision)
+        print("Positive rate:", dfYValidation.mean())
+        print(
+        "AP lift:",
+        averagePrecision / dfYValidation.mean()
+        )
 
         matrix = confusion_matrix(dfYValidation, predictions)
 
@@ -162,8 +171,11 @@ class MLPipeline:
         # print(coefficients)
 
         print("==============================\n")"""
+        
+        dfResults = dfValidationFeatures.copy()
+        dfResults["Probability"] = probabilities
 
-        return trainingAuc, validationAuc
+        return dfResults, trainingAuc, validationAuc
 
     def splitData(self, df: pd.DataFrame, percentages: list[float]):
 
