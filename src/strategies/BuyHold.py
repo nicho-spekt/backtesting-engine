@@ -1,7 +1,7 @@
 import pandas as pd
 from .BaseStrategy import BaseStrategy
 
-class BuyHold(BaseStrategy):
+class BuyHold():
     
     execution_delay = 0
     

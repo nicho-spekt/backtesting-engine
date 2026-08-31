@@ -1499,16 +1499,8 @@ if __name__ == "__main__":
 
     marketDf = loader.loadData("1d")
 
-    backtester = Backtester(inital_capital=100000, commission=0.0, slippage=0.0)
-
-    pipeline = MLPipeline()
-    
-    #dfFirst, dfSecond, dfThird, dfFourth, dfFifth = pipeline.splitData(marketDf, [0.6, 0.2, 0.2])
-
-    #modelTrainer, optimizedParams = pipeline.run(dfTrain, dfValidation, backtester, "1d", predictionHorizon=5)
-    
     validator = WalkForwardValidator()
-    
+
     dfResults = validator.run(marketDf)
 
     """dfTrain, dfValidation = pipeline.splitData(marketDf, [0.8, 0.2])
@@ -1517,12 +1509,12 @@ if __name__ == "__main__":
         dfTrain, dfValidation, backtester, interval="1d", predictionHorizon=5
     )"""
 
-    #strategy = MLStrategy(0.4)
+    # strategy = MLStrategy(0.4)
 
-    #dfSignals = strategy.generateSignals(dfResults)
-    #dfResults = backtester.run(dfSignals)
+    # dfSignals = strategy.generateSignals(dfResults)
+    # dfResults = backtester.run(dfSignals)
 
-    thresholds = [
+    """thresholds = [
         0.10,
         0.15,
         0.20,
@@ -1551,5 +1543,4 @@ if __name__ == "__main__":
         print(f"Max drawdown:      {result['Max_drawdown'] * 100:.2f}%")
         print(f"Number of trades:  {int(result['Number_of_trades'])}")
         print(f"Time invested:     {result['Time_invested'] * 100:.2f}%")
-        print("==============================\n")
-        
+        print("==============================\n")"""
