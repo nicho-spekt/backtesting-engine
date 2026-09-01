@@ -25,7 +25,6 @@ class MLPipeline:
         interval="1d",
         predictionHorizon=1,
     ):
-
         # dfTrain, dfValidation, dfTest = self.splitData(df, listPercentages)
 
         optimizer = ParameterOptimizer()
@@ -36,7 +35,7 @@ class MLPipeline:
         df = pd.concat([dfTrain, dfValidation])
 
         dfAllFeatures = featureEngine.run(
-            df, optimizedParams, interval, predictionHorizon, targetThreshold=0.025
+            df, optimizedParams, interval, predictionHorizon, targetThreshold=0.020
         )
 
         trainEndIndex = dfTrain.index[-1]

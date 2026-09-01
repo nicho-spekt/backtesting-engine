@@ -190,7 +190,12 @@ class FeatureEngine:
         return columns
 
     def run(
-        self, df: pd.DataFrame, optimizedParams, interval="1d", predictionHorizon=1, targetThreshold = 0.0
+        self,
+        df: pd.DataFrame,
+        optimizedParams,
+        interval="1d",
+        predictionHorizon=1,
+        targetThreshold=0.0,
     ):
 
         dfFeatures = df.copy().sort_index()
@@ -329,7 +334,7 @@ class FeatureEngine:
             vixClose - vixClose.rolling(20).mean()
         ) / vixClose.rolling(20).std()
 
-        #nextClose = df["Close"].shift(-predictionHorizon)
+        # nextClose = df["Close"].shift(-predictionHorizon)
 
         futureReturn = df["Close"].shift(-predictionHorizon) / df["Close"] - 1
 
